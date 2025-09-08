@@ -1,0 +1,238 @@
+---
+title: Basic API Methods
+description: The essential LiteSVM methods you need to know
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+## Quick Reference
+
+| Method               | Purpose                 | Returns                    |
+| -------------------- | ----------------------- | -------------------------- |
+| `new()`              | Create test environment | `LiteSVM`                  |
+| `airdrop()`          | Fund accounts with SOL  | `TransactionResult`        |
+| `add_program()`      | Deploy a program        | `Result<(), LiteSVMError>` |
+| `send_transaction()` | Execute transaction     | `TransactionResult`        |
+| `get_balance()`      | Check account balance   | `Option<u64>`              |
+| `get_account()`      | Get full account data   | `Option<Account>`          |
+
+## Setup Methods
+
+### `LiteSVM::new()`
+
+Creates a new test environment with sensible defaults.
+
+```rust
+let mut svm = LiteSVM::new();
+```
+
+**What it includes:**
+
+- All native programs (System, BPF Loader, etc.)
+- Default sysvars (Clock, Rent, etc.)
+- Compute budget of 200,000 units
+- Feature set matching mainnet
+
+<Callout type="tip">
+  For custom configuration, use `LiteSVM::default()` with builder methods.
+</Callout>
+
+## Funding Methods
+
+### `airdrop()`
+
+Instantly funds any account with SOL.
+
+```rust
+svm.airdrop(&pubkey, lamports).unwrap();
+```
+
+<Tabs items={['Basic Usage', 'Common Amounts', 'Multiple Accounts']}>
+<Tab value="Basic Usage">
+```rust
+let user = Keypair::new();
+svm.airdrop(&user.pubkey(), 1_000_000_000).unwrap(); // 1 SOL
+```
+</Tab>
+<Tab value="Common Amounts">
+```rust
+// Common amounts for testing
+svm.airdrop(&user.pubkey(), 1).unwrap();                    // 1 lamport
+svm.airdrop(&user.pubkey(), 1_000_000).unwrap();           // 0.001 SOL  
+svm.airdrop(&user.pubkey(), 1_000_000_000).unwrap();       // 1 SOL
+svm.airdrop(&user.pubkey(), 10_000_000_000).unwrap();      // 10 SOL
+```
+</Tab>
+<Tab value="Multiple Accounts">
+```rust
+// Fund multiple accounts
+let accounts = vec![Keypair::new(), Keypair::new(), Keypair::new()];
+for account in &accounts {
+    svm.airdrop(&account.pubkey(), 1_000_000_000).unwrap();
+}
+```
+</Tab>
+</Tabs>
+
+## Program Methods
+
+### `add_program()`
+
+Deploys a program to the test environment.
+
+```rust
+svm.add_program(program_id, &bytes).unwrap();
+```
+
+Since the initial test environment only includes builtin programs, you will need to deploy any other program needed for your tests to run.
+
+To deploy a program that you wrote, follow this:
+
+```rust
+let program_id = Pubkey::new_unique(); // Or your program's actual ID
+let bytes = include_bytes!("../target/deploy/my_program.so");
+svm.add_program(program_id, bytes).unwrap();
+```
+
+<Callout>
+  Programs are immediately available after `add_program()` - no deployment
+  transaction needed.
+</Callout>
+
+## Transaction Methods
+
+### `send_transaction()`
+
+Executes a transaction and returns detailed results.
+
+```rust
+let result = svm.send_transaction(tx).unwrap();
+```
+
+**Returns `TransactionMetadata` on success:**
+
+```rust
+pub struct TransactionMetadata {
+    pub compute_units_consumed: u64,  // How many CUs used
+    pub logs: Vec<String>,            // Program logs
+    pub return_data: (Pubkey, Vec<u8>), // Return data if any
+    pub inner_instructions: Vec<InnerInstructions>, // Inner instructions
+}
+```
+
+**Example with error handling:**
+
+```rust
+match svm.send_transaction(tx) {
+    Ok(meta) => {
+        println!("Success! Used {} CUs", meta.compute_units_consumed);
+        println!("Logs: {:?}", meta.logs);
+    }
+    Err(e) => {
+        println!("Failed: {:?}", e.err);
+        println!("Logs before error: {:?}", e.meta.logs);
+    }
+}
+```
+
+## State Methods
+
+### `get_balance()`
+
+Returns account balance in lamports.
+
+```rust
+let balance = svm.get_balance(&pubkey);
+```
+
+**Common usage:**
+
+```rust
+// Check if account exists and has funds
+if let Some(balance) = svm.get_balance(&pubkey) {
+    println!("Balance: {} SOL", balance as f64 / 1e9);
+} else {
+    println!("Account doesn't exist");
+}
+```
+
+### `get_account()`
+
+Returns full account data.
+
+```rust
+let account = svm.get_account(&pubkey);
+```
+
+**Returns `Account`:**
+
+```rust
+pub struct Account {
+    pub lamports: u64,        // Balance
+    pub data: Vec<u8>,        // Account data
+    pub owner: Pubkey,        // Program that owns this account
+    pub executable: bool,     // Is this a program?
+    pub rent_epoch: u64,      // Rent collection epoch
+}
+```
+
+**Example - Reading token account:**
+
+```rust
+use spl_token::state::Account as TokenAccount;
+
+if let Some(account) = svm.get_account(&token_account_pubkey) {
+    let token_account = TokenAccount::unpack(&account.data)?;
+    println!("Token balance: {}", token_account.amount);
+    println!("Token owner: {}", token_account.owner);
+}
+```
+
+## Utility Methods
+
+### `latest_blockhash()`
+
+Get the current blockhash for transactions.
+
+```rust
+let blockhash = svm.latest_blockhash();
+```
+
+## Common Patterns
+
+### Transaction Building Pattern
+
+```rust
+let tx = Transaction::new_signed_with_payer(
+    &[instruction],
+    Some(&payer.pubkey()),
+    &[&payer],
+    svm.latest_blockhash(),
+);
+```
+
+### Error Checking Pattern
+
+```rust
+let result = svm.send_transaction(tx);
+assert!(result.is_err());
+assert_eq!(
+    result.unwrap_err().err,
+    TransactionError::InsufficientFunds
+);
+```
+
+### Balance Assertion Pattern
+
+```rust
+let before = svm.get_balance(&account).unwrap_or(0);
+svm.send_transaction(tx).unwrap();
+let after = svm.get_balance(&account).unwrap_or(0);
+assert_eq!(after - before, expected_change);
+```
+
+## Next Steps
+
+- **[Examples →](/docs/examples)** - See these methods in action
+- **[Advanced →](/docs/advanced)** - Deep dive into configuration

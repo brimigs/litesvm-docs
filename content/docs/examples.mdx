@@ -1,0 +1,458 @@
+---
+title: Examples
+description: Complete test examples for common Solana testing scenarios
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+# Examples
+
+Complete, copy-paste ready tests for common scenarios.
+
+## Testing a Token Transfer
+
+Complete test for transferring SOL between accounts:
+
+```rust title="tests/transfer_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    signature::{Keypair, Signer},
+    system_instruction,
+    transaction::Transaction,
+};
+
+#[test]
+fn test_sol_transfer() {
+    let mut svm = LiteSVM::new();
+    
+    // Create accounts
+    let alice = Keypair::new();
+    let bob = Keypair::new();
+    
+    // Fund alice with 10 SOL
+    svm.airdrop(&alice.pubkey(), 10_000_000_000).unwrap();
+    
+    // Create transfer instruction
+    let transfer_ix = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        1_000_000_000, // 1 SOL
+    );
+    
+    // Build transaction
+    let tx = Transaction::new_signed_with_payer(
+        &[transfer_ix],
+        Some(&alice.pubkey()),
+        &[&alice],
+        svm.latest_blockhash(),
+    );
+    
+    // Send and verify
+    let result = svm.send_transaction(tx).unwrap();
+    
+    // Check balances
+    assert_eq!(svm.get_balance(&bob.pubkey()).unwrap(), 1_000_000_000);
+    assert!(svm.get_balance(&alice.pubkey()).unwrap() < 9_000_000_000);
+    
+    println!("✅ Transfer successful!");
+    println!("   Compute units used: {}", result.compute_units_consumed);
+    println!("   Transaction logs: {:?}", result.logs);
+}
+```
+
+## Testing Program Deployment
+
+Deploy and call a simple program:
+
+```rust title="tests/program_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+    transaction::Transaction,
+};
+
+#[test]
+fn test_program_deployment() {
+    let mut svm = LiteSVM::new();
+    
+    // Deploy the program
+    let program_id = Pubkey::new_unique();
+    let program_bytes = include_bytes!("../target/deploy/hello_world.so");
+    svm.add_program(program_id, program_bytes).unwrap();
+    
+    // Create payer account
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    
+    // Create instruction to call program
+    let instruction = Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer.pubkey(), true),
+        ],
+        data: vec![], // Program-specific data
+    };
+    
+    // Send transaction
+    let tx = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&payer.pubkey()),
+        &[&payer],
+        svm.latest_blockhash(),
+    );
+    
+    let result = svm.send_transaction(tx).unwrap();
+    
+    // Verify program was called
+    assert!(result.logs.iter().any(|log| 
+        log.contains(&format!("Program {} invoke", program_id))
+    ));
+    
+    println!("✅ Program called successfully!");
+    println!("   Logs: {:?}", result.logs);
+}
+```
+
+## Testing PDA Creation
+
+Create and interact with Program Derived Addresses:
+
+```rust title="tests/pda_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    account::Account,
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+};
+
+#[test]
+fn test_pda_creation() {
+    let mut svm = LiteSVM::new();
+    
+    // Program that owns the PDA
+    let program_id = Pubkey::new_unique();
+    let program_bytes = include_bytes!("../target/deploy/pda_program.so");
+    svm.add_program(program_id, program_bytes).unwrap();
+    
+    // Derive PDA address
+    let seed = b"my_pda";
+    let (pda, bump) = Pubkey::find_program_address(
+        &[seed],
+        &program_id
+    );
+    
+    println!("PDA: {}", pda);
+    println!("Bump: {}", bump);
+    
+    // Create PDA account manually (for testing)
+    svm.set_account(pda, Account {
+        lamports: 1_000_000,
+        data: vec![bump], // Store bump seed in data
+        owner: program_id,
+        executable: false,
+        rent_epoch: 0,
+    }).unwrap();
+    
+    // Verify PDA was created
+    let account = svm.get_account(&pda).unwrap();
+    assert_eq!(account.owner, program_id);
+    assert_eq!(account.data[0], bump);
+    
+    println!("✅ PDA created successfully!");
+}
+```
+
+## Testing Error Conditions
+
+Verify your program handles errors correctly:
+
+```rust title="tests/error_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    signature::{Keypair, Signer},
+    system_instruction,
+    transaction::{Transaction, TransactionError},
+};
+
+#[test]
+fn test_insufficient_funds_error() {
+    let mut svm = LiteSVM::new();
+    
+    let alice = Keypair::new();
+    let bob = Keypair::new();
+    
+    // Give Alice only 0.5 SOL
+    svm.airdrop(&alice.pubkey(), 500_000_000).unwrap();
+    
+    // Try to transfer 1 SOL (should fail)
+    let transfer_ix = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        1_000_000_000, // More than Alice has
+    );
+    
+    let tx = Transaction::new_signed_with_payer(
+        &[transfer_ix],
+        Some(&alice.pubkey()),
+        &[&alice],
+        svm.latest_blockhash(),
+    );
+    
+    // Verify it fails with expected error
+    let result = svm.send_transaction(tx);
+    assert!(result.is_err());
+    
+    let err = result.unwrap_err();
+    match err.err {
+        TransactionError::InsufficientFundsForFee => {
+            println!("✅ Got expected error: InsufficientFundsForFee");
+        }
+        _ => panic!("Got unexpected error: {:?}", err.err),
+    }
+    
+    // Verify no funds were transferred
+    assert_eq!(svm.get_balance(&bob.pubkey()).unwrap_or(0), 0);
+}
+```
+
+## Testing SPL Token Operations
+
+<Callout>
+  Requires `cargo add --dev litesvm-token spl-token`
+</Callout>
+
+```rust title="tests/spl_token_test.rs"
+use litesvm::LiteSVM;
+use litesvm_token::{CreateMint, MintTo, CreateAccount};
+use solana_sdk::{
+    signature::{Keypair, Signer},
+    transaction::Transaction,
+};
+
+#[test]
+fn test_spl_token_operations() {
+    let mut svm = LiteSVM::new();
+    
+    // Create accounts
+    let authority = Keypair::new();
+    let user = Keypair::new();
+    
+    // Fund authority
+    svm.airdrop(&authority.pubkey(), 10_000_000_000).unwrap();
+    
+    // Create mint
+    let mint = Keypair::new();
+    let create_mint_ix = CreateMint::new(
+        &authority.pubkey(),
+        &mint.pubkey(),
+        &authority.pubkey(),
+        None,
+        9, // 9 decimals
+    ).instruction();
+    
+    let tx = Transaction::new_signed_with_payer(
+        &[create_mint_ix],
+        Some(&authority.pubkey()),
+        &[&authority, &mint],
+        svm.latest_blockhash(),
+    );
+    
+    svm.send_transaction(tx).unwrap();
+    
+    // Create token account for user
+    let token_account = Keypair::new();
+    let create_account_ix = CreateAccount::new(
+        &authority.pubkey(),
+        &token_account.pubkey(),
+        &mint.pubkey(),
+        &user.pubkey(),
+    ).instruction();
+    
+    let tx = Transaction::new_signed_with_payer(
+        &[create_account_ix],
+        Some(&authority.pubkey()),
+        &[&authority, &token_account],
+        svm.latest_blockhash(),
+    );
+    
+    svm.send_transaction(tx).unwrap();
+    
+    // Mint tokens to user
+    let mint_ix = MintTo::new(
+        &mint.pubkey(),
+        &token_account.pubkey(),
+        &authority.pubkey(),
+        1_000_000_000, // 1 token (with 9 decimals)
+    ).instruction();
+    
+    let tx = Transaction::new_signed_with_payer(
+        &[mint_ix],
+        Some(&authority.pubkey()),
+        &[&authority],
+        svm.latest_blockhash(),
+    );
+    
+    svm.send_transaction(tx).unwrap();
+    
+    println!("✅ Token operations successful!");
+}
+```
+
+## Testing Cross-Program Invocation (CPI)
+
+Test programs calling other programs:
+
+```rust title="tests/cpi_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+    transaction::Transaction,
+    system_program,
+};
+
+#[test]
+fn test_cross_program_invocation() {
+    let mut svm = LiteSVM::new();
+    
+    // Deploy both programs
+    let caller_program = Pubkey::new_unique();
+    let callee_program = Pubkey::new_unique();
+    
+    svm.add_program(
+        caller_program, 
+        include_bytes!("../target/deploy/caller.so")
+    ).unwrap();
+    
+    svm.add_program(
+        callee_program,
+        include_bytes!("../target/deploy/callee.so")
+    ).unwrap();
+    
+    // Setup accounts
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    
+    // Create instruction that will trigger CPI
+    let instruction = Instruction {
+        program_id: caller_program,
+        accounts: vec![
+            AccountMeta::new(payer.pubkey(), true),
+            AccountMeta::new_readonly(callee_program, false),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ],
+        data: vec![1], // Instruction to trigger CPI
+    };
+    
+    let tx = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&payer.pubkey()),
+        &[&payer],
+        svm.latest_blockhash(),
+    );
+    
+    let result = svm.send_transaction(tx).unwrap();
+    
+    // Verify both programs were invoked
+    assert!(result.logs.iter().any(|log| 
+        log.contains(&format!("Program {} invoke", caller_program))
+    ));
+    assert!(result.logs.iter().any(|log| 
+        log.contains(&format!("Program {} invoke", callee_program))
+    ));
+    
+    println!("✅ CPI successful!");
+    println!("   Logs showing both programs:");
+    for log in &result.logs {
+        if log.contains("invoke") {
+            println!("   {}", log);
+        }
+    }
+}
+```
+
+## Testing Time-Dependent Logic
+
+Test features that depend on slots or timestamps:
+
+```rust title="tests/time_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::clock::Clock;
+
+#[test]
+fn test_time_locked_feature() {
+    let mut svm = LiteSVM::new();
+    
+    // Get current time
+    let clock: Clock = svm.get_sysvar();
+    println!("Starting slot: {}", clock.slot);
+    println!("Starting timestamp: {}", clock.unix_timestamp);
+    
+    // Test something at current time
+    // ... your test logic ...
+    
+    // Jump forward 100 slots
+    svm.warp_to_slot(clock.slot + 100);
+    
+    // Verify time changed
+    let new_clock: Clock = svm.get_sysvar();
+    assert_eq!(new_clock.slot, clock.slot + 100);
+    
+    // Test time-locked feature is now available
+    // ... your test logic ...
+    
+    println!("✅ Time travel successful!");
+}
+```
+
+## Common Test Helpers
+
+Reusable functions for your test suite:
+
+```rust title="tests/helpers.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    signature::Keypair,
+    pubkey::Pubkey,
+};
+
+/// Standard test setup
+pub fn setup_test() -> (LiteSVM, Keypair) {
+    let mut svm = LiteSVM::new();
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    (svm, payer)
+}
+
+/// Deploy a program and return its ID
+pub fn deploy_program(svm: &mut LiteSVM, bytes: &[u8]) -> Pubkey {
+    let program_id = Pubkey::new_unique();
+    svm.add_program(program_id, bytes).unwrap();
+    program_id
+}
+
+/// Create and fund a test account
+pub fn create_funded_account(svm: &mut LiteSVM, lamports: u64) -> Keypair {
+    let account = Keypair::new();
+    svm.airdrop(&account.pubkey(), lamports).unwrap();
+    account
+}
+
+// Use in your tests:
+#[test]
+fn test_with_helpers() {
+    let (mut svm, payer) = setup_test();
+    let program_id = deploy_program(&mut svm, include_bytes!("../program.so"));
+    let user = create_funded_account(&mut svm, 1_000_000_000);
+    
+    // Your test logic here...
+}
+```
+
+## Next Steps
+
+- **[Advanced →](/docs/advanced)** - Custom configurations and advanced features

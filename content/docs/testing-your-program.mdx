@@ -1,0 +1,283 @@
+---
+title: Testing Your Program
+description: Learn how to test your Solana program with LiteSVM
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+## Setup
+
+Before testing your program, ensure you have:
+
+1. Built your program to generate the `.so` file
+2. Installed LiteSVM and the required dependencies
+3. Created a test file in your `tests` directory
+
+## Basic Program Test
+
+Here's a complete example of testing a simple program:
+
+```rust title="tests/program_test.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    signature::{Keypair, Signer},
+    transaction::Transaction,
+};
+
+#[test]
+fn test_my_program() {
+    // Initialize the test environment
+    let mut svm = LiteSVM::new();
+
+    // Deploy your program
+    let program_id = Pubkey::new_unique(); // Or use your program's actual ID
+    let program_bytes = include_bytes!("../target/deploy/my_program.so");
+    svm.add_program(program_id, program_bytes);
+
+    // Create and fund test accounts
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+
+    // Create your instruction
+    let instruction = Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(payer.pubkey(), true),
+        ],
+        data: vec![], // Your instruction data
+    };
+
+    // Build and send transaction
+    let tx = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&payer.pubkey()),
+        &[&payer],
+        svm.latest_blockhash(),
+    );
+
+    // Execute and verify
+    let result = svm.send_transaction(tx).unwrap();
+    // Check transaction succeeded
+    println!("Transaction logs: {:?}", result.logs);
+
+    println!("Program executed successfully!");
+}
+```
+
+<Callout type="info">
+  Note: The basic test environment includes all runtime features enabled,
+  default sysvars, precompiles, spl programs, sigverify, and all built in
+  programs, like the system program. Any other program that you want to interact
+  with must be deployed to the test environment.
+</Callout>
+
+<Callout type="tip">
+  When deploying programs, `include_bytes!` embeds the binary directly into the
+  test executable at compile time, so there is no I/O during test
+  execution.{" "}
+</Callout>
+
+## Common Test Patterns
+
+### Helper Function for Setup
+
+Create a reusable setup function:
+
+```rust
+fn setup_test_environment() -> (LiteSVM, Keypair, Pubkey) {
+    let mut svm = LiteSVM::new();
+
+    // Deploy program
+    let program_id = Pubkey::new_unique(); // Or use your program's actual ID
+    let program_bytes = include_bytes!("../../target/deploy/my_program.so");
+    svm.add_program(program_id, program_bytes);
+
+    // Create funded payer
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+
+    (svm, payer, program_id)
+}
+```
+
+### Testing Several Instructions
+
+When your program has multiple instructions, organize your tests accordingly:
+
+```rust
+#[test]
+fn test_initialize() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+    // Test initialization logic
+}
+
+#[test]
+fn test_update() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+    // Initialize first
+    // Then test update logic
+}
+
+#[test]
+fn test_close() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+    // Setup initial state
+    // Test close logic
+}
+```
+
+### Testing Error Cases
+
+Verify your program handles errors correctly:
+
+```rust
+#[test]
+fn test_unauthorized_access() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+    let unauthorized = Keypair::new();
+
+    // Create instruction with unauthorized signer
+    let instruction = create_instruction_with_signer(&unauthorized.pubkey());
+
+    let tx = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&payer.pubkey()),
+        &[&payer], // Note: unauthorized key not included
+        svm.latest_blockhash(),
+    );
+
+    // Verify it fails with expected error
+    let result = svm.send_transaction(tx);
+    assert!(result.is_err());
+}
+```
+
+### Testing State Changes
+
+Verify account data changes:
+
+```rust
+#[test]
+fn test_state_update() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+
+    // Get initial state
+    let account = Keypair::new();
+    svm.airdrop(&account.pubkey(), 1_000_000_000).unwrap();
+    let initial_balance = svm.get_balance(&account.pubkey()).unwrap();
+
+    // Execute transaction
+    svm.send_transaction(tx).unwrap();
+
+    // Verify state changed
+    let final_balance = svm.get_balance(&account.pubkey()).unwrap();
+    assert_ne!(initial_balance, final_balance);
+
+    // Check account data
+    let account_data = svm.get_account(&account.pubkey()).unwrap();
+    // Verify your custom data structure
+}
+```
+
+## Debugging Tips
+
+### Examining Transaction Logs
+
+```rust
+let result = svm.send_transaction(tx).unwrap();
+
+// Print all logs for debugging
+for log in &result.logs {
+    println!("{}", log);
+}
+
+// Check for specific messages
+assert!(result.logs.iter().any(|log|
+    log.contains("Expected message")
+));
+```
+
+## Testing with PDAs
+
+When your program uses Program Derived Addresses:
+
+```rust
+#[test]
+fn test_pda_creation() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+
+    // Derive PDA
+    let (pda, bump) = Pubkey::find_program_address(
+        &[b"seed", payer.pubkey().as_ref()],
+        &program_id
+    );
+
+    // Create instruction that will create the PDA
+    let instruction = create_pda_instruction(pda, bump);
+
+    // Send transaction
+    let tx = build_transaction(instruction, &payer, &svm);
+    svm.send_transaction(tx).unwrap();
+
+    // Verify PDA was created
+    let pda_account = svm.get_account(&pda).unwrap();
+    assert_eq!(pda_account.owner, program_id);
+}
+```
+
+## Testing with Associated Token Accounts
+
+When working with SPL tokens:
+
+```rust
+use spl_associated_token_account::get_associated_token_address;
+
+#[test]
+fn test_token_transfer() {
+    let mut svm = setup_test_environment();
+
+    // Deploy SPL Token program (if not using built-in)
+    // Create mint and token accounts
+    // Test your program's token operations
+}
+```
+
+<Callout type="tip">
+  LiteSVM includes SPL Token programs by default, so you don't need to deploy
+  them manually.
+</Callout>
+
+## Performance Testing
+
+Measure and optimize your program's performance:
+
+```rust
+#[test]
+fn test_performance() {
+    let (mut svm, payer, program_id) = setup_test_environment();
+
+    let start = std::time::Instant::now();
+
+    // Run multiple transactions
+    for i in 0..100 {
+        let tx = create_test_transaction(i);
+        svm.send_transaction(tx).unwrap();
+    }
+
+    let duration = start.elapsed();
+    println!("100 transactions in {:?}", duration);
+
+    // Ensure performance requirements are met
+    assert!(duration.as_secs() < 1);
+}
+```
+
+## Next Steps
+
+- **[API Reference →](/docs/api-reference)** - Detailed API documentation
+- **[Examples →](/docs/examples)** - More complete test examples
+- **[Advanced →](/docs/advanced)** - Advanced testing techniques

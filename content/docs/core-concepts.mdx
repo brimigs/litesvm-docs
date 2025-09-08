@@ -1,0 +1,170 @@
+---
+title: Core Concepts
+description: Understanding how LiteSVM works and why it's different
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+## The Mental Model
+
+Think of LiteSVM as a Solana VM running inside your test function. Not as
+a separate process, not as a network service - it's just a library call in
+your code.
+
+### Traditional Testing
+
+```rust
+// Traditional approach - slow and complex
+let validator = TestValidator::new(); // Starts separate process
+let client = RpcClient::new(validator.url()); // Network connection
+
+// Every operation is async and goes over network
+let balance = client.get_balance(&pubkey).await?;
+thread::sleep(Duration::from_secs(1)); // Wait for confirmation
+```
+
+### LiteSVM Testing
+
+```rust
+// LiteSVM - fast and simple
+let mut svm = LiteSVM::new(); // Just a struct in memory
+
+// Everything is synchronous and immediate
+let balance = svm.get_balance(&pubkey)?;
+```
+
+## Key Principles
+
+### 1. Everything is Synchronous
+
+No `async`, no `await`, no delays:
+
+```rust
+// Send transaction and check result immediately
+svm.send_transaction(tx)?;
+let balance = svm.get_balance(&account)?; // Already updated!
+```
+
+### 2. Direct State Manipulation
+
+Set up any test state directly:
+
+```rust
+// Create any account with any data
+svm.set_account(pubkey, Account {
+    lamports: 1_000_000_000,
+    data: vec![1, 2, 3, 4],
+    owner: program_id,
+    executable: false,
+    rent_epoch: 0,
+})?;
+```
+
+### 3. Time is Under Your Control
+
+```rust
+// Jump to any slot instantly
+svm.warp_to_slot(1000);
+
+// Expire blockhashes on demand
+svm.expire_blockhash();
+
+// Set any sysvar
+let mut clock = svm.get_sysvar::<Clock>();
+clock.unix_timestamp = 1735689600; // Jan 1, 2025
+svm.set_sysvar(&clock);
+```
+
+### 4. Errors are Immediate and Clear
+
+```rust
+match svm.send_transaction(tx) {
+    Ok(meta) => {
+        // Transaction succeeded
+        println!("Compute units: {}", meta.compute_units_consumed);
+    }
+    Err(e) => {
+        // Error with full details
+        println!("Error: {:?}", e.err);
+        println!("Logs: {:?}", e.meta.logs);
+    }
+}
+```
+
+## Common Patterns
+
+### Test Setup Helper
+
+Create a reusable setup function:
+
+```rust
+fn setup_test() -> (LiteSVM, Keypair) {
+    let mut svm = LiteSVM::new();
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    (svm, payer)
+}
+
+#[test]
+fn test_something() {
+    let (mut svm, payer) = setup_test();
+    // Your test here
+}
+```
+
+### State Verification Pattern
+
+```rust
+#[test]
+fn test_state_change() {
+    let mut svm = LiteSVM::new();
+
+    // Capture initial state
+    let before = svm.get_account(&pubkey);
+
+    // Execute operation
+    svm.send_transaction(tx)?;
+
+    // Verify state changed
+    let after = svm.get_account(&pubkey);
+    assert_ne!(before, after);
+}
+```
+
+### Error Testing Pattern
+
+```rust
+#[test]
+fn test_error_handling() {
+    let mut svm = LiteSVM::new();
+
+    // Set up invalid state
+    let tx = create_invalid_transaction();
+
+    // Verify it fails as expected
+    let result = svm.send_transaction(tx);
+    assert!(result.is_err());
+
+    if let Err(e) = result {
+        assert_eq!(e.err, TransactionError::InsufficientFunds);
+    }
+}
+```
+
+## Performance Tips
+
+<div className="space-y-4 mt-6">
+
+- Reuse `LiteSVM` instances when testing multiple scenarios
+- Use `include_bytes!` for program binaries
+- Keep test data small and focused
+
+</div>
+
+## Next Steps
+
+Now that you understand the concepts:
+
+- **[Testing Your Program →](/docs/testing-your-program)** - Learn how to test your own Solana program
+- **[API Reference →](/docs/api-reference)** - Master the 6 essential methods
+- **[Examples →](/docs/examples)** - See these concepts in action

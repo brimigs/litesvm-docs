@@ -1,0 +1,99 @@
+---
+title: LiteSVM - Lightning-fast Solana Testing
+description: Lightning-fast Solana program testing with an in-process VM. Test your programs 10x faster without network overhead or validator processes.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+<div className="flex flex-col items-center justify-center text-center px-6 py-12 md:py-16">
+  <h1 className="mb-4 text-5xl font-bold bg-gradient-to-r from-[#14F195] to-[#9945FF] bg-clip-text text-transparent">
+    LiteSVM
+  </h1>
+
+{" "}
+
+<div className="text-xl text-fd-muted-foreground mb-4 max-w-2xl">
+  Lightning-fast Solana program testing with an in-process VM.
+</div>
+
+</div>
+
+<div className="mt-4 mb-8">
+  <div className="bg-fd-muted/50 rounded-lg p-8 mx-auto">
+    <h2 className="text-3xl font-bold text-left mb-6 bg-gradient-to-r from-[#14F195] to-[#9945FF] bg-clip-text text-transparent">
+      Overview
+    </h2>
+    <div className="mb-4">
+      LiteSVM is a lightweight library for testing Solana Programs that works by
+      creating an in-process Solana VM optimized for program developers. Unlike
+      other testing approaches that spin up separate validator processes,
+      LiteSVM embeds the VM inside your tests, making them execute much faster.
+    </div>
+    <div>
+      It handles the complexity of managing accounts, deploying programs, and
+      processing transactions behind a simple API. The framework automatically
+      manages blockchain state between transactions, so you don't need to
+      manually track account changes or balances.
+    </div>
+  </div>
+</div>
+
+<div className="px-6 mb-12">
+  <h2 className="text-3xl font-bold text-left mb-8 bg-gradient-to-r from-[#14F195] to-[#9945FF] bg-clip-text text-transparent">
+    Installation
+  </h2>
+  
+  <div className="flex flex-col gap-6">
+    <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Install LiteSVM Core Library</h3>
+          <p className="text-sm text-fd-muted-foreground">Essential testing framework</p>
+        </div>
+        <a
+          href="https://crates.io/crates/litesvm"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+        >
+          📦 crates.io
+        </a>
+      </div>
+      ```bash
+      cargo add --dev litesvm
+      ```
+    </div>
+
+    <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Add SPL Token Support</h3>
+          <p className="text-sm text-fd-muted-foreground">Token program utilities</p>
+        </div>
+        <a
+          href="https://crates.io/crates/litesvm-token"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+        >
+          📦 crates.io
+        </a>
+      </div>
+      ```bash
+      cargo add --dev litesvm-token
+      ```
+    </div>
+
+  </div>
+</div>
+
+<div className="flex gap-4 flex-wrap justify-center mt-12 mb-12">
+  <a
+    href="/docs/getting-started"
+    className="px-6 py-3 bg-gradient-to-r from-[#14F195] to-[#9945FF] text-black font-semibold rounded-lg hover:opacity-90 transition-opacity"
+  >
+    View Documentation
+  </a>
+</div>
