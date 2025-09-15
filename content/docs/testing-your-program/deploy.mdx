@@ -1,0 +1,144 @@
+---
+title: Deploying Programs
+description: Learn how to test your Solana program with LiteSVM
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+## Getting Started
+
+```rust
+let mut svm = LiteSVM::new();
+```
+
+This creates the basic litesvm test environment, which includes all runtime features enabled, default sysvars, precompiles, spl programs, sigverify, and all built in programs like the system program.
+
+To interact with any other program in your tests, you must deploy that program to your test environment.
+
+1. Build and deploy the program you want to test
+
+2. Find all programs that your program makes CPI calls to and deploy those programs
+
+<Callout type="info">
+  **Example:** If your program is using data feeds from Pyth, you will need to
+  have the Pyth program deployed to your test environment.
+</Callout>
+
+## Basic Program Deployment
+
+### Method 1: Deploy from Bytes
+
+You can also deploy programs directly from byte arrays, useful for embedded test programs:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::pubkey;
+
+let mut svm = LiteSVM::new();
+let program_id = Pubkey::new_unique();
+let program_bytes = include_bytes!("../target/deploy/program.so");
+
+// Deploy from bytes
+svm.add_program(program_id, program_bytes).unwrap();
+```
+
+<Callout type="tip">
+  `include_bytes!` embeds the binary directly into the test executable at
+  compile time, so there is no I/O during test execution.{" "}
+</Callout>
+
+### Method 2: Deploy from File (.so)
+
+The most common way to deploy a program is using a compiled `.so` file:
+
+```rust
+use litesvm::LiteSVM;
+use solana_pubkey::Pubkey;
+
+let mut svm = LiteSVM::new();
+let program_id = Pubkey::new_unique();
+
+// Deploy from a .so file
+svm.add_program_from_file(program_id, "path/to/program.so").unwrap();
+```
+
+## Pulling Programs from Mainnet/Devnet
+
+You can use the Solana CLI to dump programs from live clusters and use them in tests:
+
+```bash
+# Dump a program from mainnet
+solana program dump gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s pyth.so --url mainnet-beta
+
+# Dump from devnet
+solana program dump YourProgramID program.so --url devnet
+```
+
+Then load it in your tests:
+
+```rust
+svm.add_program_from_file(
+    pubkey!("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s"),
+    "pyth.so"
+).unwrap();
+```
+
+## Best Practices
+
+### 1. Choose the Right Deployment Method
+
+- **Use `add_program()`** when:
+
+  - Programs are embedded in your test binary
+  - You need deterministic program IDs
+  - Working with small programs
+
+- **Use `add_program_from_file()`** when:
+
+  - Programs are built separately
+  - Working with large programs
+  - Programs change frequently during development
+
+### 2. Program ID Management
+
+```rust
+// Option 1: Deterministic IDs for reproducible tests
+let program_id = pubkey!("YourProgramID111111111111111111111111111111");
+
+// Option 2: Random IDs for isolation
+let program_id = Pubkey::new_unique();
+
+// Option 3: Use the same ID as mainnet/devnet
+let program_id = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+```
+
+## Common Issues and Solutions
+
+### Program Not Found Error
+
+If you get `TransactionError::InvalidProgramForExecution`:
+
+```rust
+// Ensure program is deployed before use
+svm.add_program(program_id, &program_bytes).unwrap();
+
+// Verify deployment
+assert!(svm.get_account(&program_id).is_some());
+assert!(svm.get_account(&program_id).unwrap().executable);
+```
+
+### Insufficient Lamports for Deployment
+
+Programs need rent-exempt lamports:
+
+```rust
+let program_len = program_bytes.len();
+let lamports = svm.minimum_balance_for_rent_exemption(program_len);
+// Program account is automatically funded with required lamports
+```
+
+## Next Steps
+
+In the next section, we'll learn how to execute program instructions.

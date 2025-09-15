@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Install LiteSVM and write your first test
+description: Install LiteSVM and write your first tests.
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -9,6 +9,8 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # Quick Start Guide
 
+This guide covers the basics, how to create an account, fund it, and send a transaction.
+
 <Steps>
 
 <Step>
@@ -16,19 +18,10 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 Add LiteSVM to your dev dependencies:
 
-<Tabs items={['Basic', 'With SPL Token Support']}>
-<Tab value="Basic">
 ```bash
 cargo add --dev litesvm
 ```
-</Tab>
-<Tab value="With SPL Token Support">
-```bash
-cargo add --dev litesvm
-cargo add --dev litesvm-token
-```
-</Tab>
-</Tabs>
+
 </Step>
 
 <Step>
@@ -43,7 +36,9 @@ cargo add solana-precompiles solana-account solana-pubkey solana-feature-set sol
 </Step>
 
 <Step>
-### Write Your First Test
+### Write Your First test
+
+This test will create and fund a new account in the LiteSVM test environment.
 
 Create a new test file and copy this code:
 
@@ -89,18 +84,17 @@ Account funded with 1 SOL
 test result: ok. 1 passed; 0 failed
 ```
 
-</Step>
-
-</Steps>
-
-<br />
-
 <Callout type="success">
   **That's it!** You just made your first litesvm test, that covers creating an
   account and funding it.
 </Callout>
 
-## Up Next: Send a Transaction
+</Step>
+
+<Step>
+### Write Your Second Test
+
+This test will execute a transaction in the LiteSVM test environment.
 
 ```rust title="tests/transfer_test.rs"
 use litesvm::LiteSVM;
@@ -152,8 +146,12 @@ fn test_transfer() {
   the system program.
 </Callout>
 
+</Step>
+</Steps>
+
 ## Next Steps
 
 - **[Core Concepts →](/docs/core-concepts)** - Understand the mental model
+- **[Testing Your Program →](/docs/testing-your-program)** - Learn how to test your own Solana program
 - **[API Reference →](/docs/api-reference)** - Learn the essential methods
 - **[Examples →](/docs/examples)** - Copy-paste solutions for common scenarios

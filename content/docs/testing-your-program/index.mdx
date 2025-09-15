@@ -1,5 +1,5 @@
 ---
-title: Testing Your Program
+title: Overview
 description: Learn how to test your Solana program with LiteSVM
 ---
 
@@ -15,9 +15,9 @@ Before testing your program, ensure you have:
 2. Installed LiteSVM and the required dependencies
 3. Created a test file in your `tests` directory
 
-## Basic Program Test
+## Basic Program Test Layout
 
-Here's a complete example of testing a simple program:
+Here are all the basic steps needed to call and execute an instruction in a program.
 
 ```rust title="tests/program_test.rs"
 use litesvm::LiteSVM;
@@ -28,13 +28,15 @@ use solana_sdk::{
     transaction::Transaction,
 };
 
+use my_program;
+
 #[test]
 fn test_my_program() {
     // Initialize the test environment
     let mut svm = LiteSVM::new();
 
-    // Deploy your program
-    let program_id = Pubkey::new_unique(); // Or use your program's actual ID
+    // Deploy your program to the test environment
+    let program_id = Pubkey::from(my_program::ID);
     let program_bytes = include_bytes!("../target/deploy/my_program.so");
     svm.add_program(program_id, program_bytes);
 
@@ -48,7 +50,7 @@ fn test_my_program() {
         accounts: vec![
             AccountMeta::new(payer.pubkey(), true),
         ],
-        data: vec![], // Your instruction data
+        data: vec![],
     };
 
     // Build and send transaction
@@ -59,8 +61,9 @@ fn test_my_program() {
         svm.latest_blockhash(),
     );
 
-    // Execute and verify
+    // Execute
     let result = svm.send_transaction(tx).unwrap();
+
     // Check transaction succeeded
     println!("Transaction logs: {:?}", result.logs);
 
@@ -75,11 +78,7 @@ fn test_my_program() {
   with must be deployed to the test environment.
 </Callout>
 
-<Callout type="tip">
-  When deploying programs, `include_bytes!` embeds the binary directly into the
-  test executable at compile time, so there is no I/O during test
-  execution.{" "}
-</Callout>
+This example only covers the basics of deploying programs to the LiteSVM test environment, for more information jump to the [Deploying Programs](/docs/testing-your-program/deploy) section.
 
 ## Common Test Patterns
 
@@ -92,8 +91,8 @@ fn setup_test_environment() -> (LiteSVM, Keypair, Pubkey) {
     let mut svm = LiteSVM::new();
 
     // Deploy program
-    let program_id = Pubkey::new_unique(); // Or use your program's actual ID
-    let program_bytes = include_bytes!("../../target/deploy/my_program.so");
+    let program_id = Pubkey::from(my_program::ID);
+    let program_bytes = include_bytes!("../target/deploy/my_program.so");
     svm.add_program(program_id, program_bytes);
 
     // Create funded payer
@@ -130,32 +129,6 @@ fn test_close() {
 }
 ```
 
-### Testing Error Cases
-
-Verify your program handles errors correctly:
-
-```rust
-#[test]
-fn test_unauthorized_access() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-    let unauthorized = Keypair::new();
-
-    // Create instruction with unauthorized signer
-    let instruction = create_instruction_with_signer(&unauthorized.pubkey());
-
-    let tx = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer.pubkey()),
-        &[&payer], // Note: unauthorized key not included
-        svm.latest_blockhash(),
-    );
-
-    // Verify it fails with expected error
-    let result = svm.send_transaction(tx);
-    assert!(result.is_err());
-}
-```
-
 ### Testing State Changes
 
 Verify account data changes:
@@ -183,25 +156,7 @@ fn test_state_update() {
 }
 ```
 
-## Debugging Tips
-
-### Examining Transaction Logs
-
-```rust
-let result = svm.send_transaction(tx).unwrap();
-
-// Print all logs for debugging
-for log in &result.logs {
-    println!("{}", log);
-}
-
-// Check for specific messages
-assert!(result.logs.iter().any(|log|
-    log.contains("Expected message")
-));
-```
-
-## Testing with PDAs
+### Testing with PDAs
 
 When your program uses Program Derived Addresses:
 
@@ -229,52 +184,11 @@ fn test_pda_creation() {
 }
 ```
 
-## Testing with Associated Token Accounts
+### Testing With SPL Tokens
 
-When working with SPL tokens:
+If your program using tokens, rather than manually creating and handling SPL tokens, Associated Token Accounts, Mint Accounts, etc, use the `litesvm-token` crate.
 
-```rust
-use spl_associated_token_account::get_associated_token_address;
-
-#[test]
-fn test_token_transfer() {
-    let mut svm = setup_test_environment();
-
-    // Deploy SPL Token program (if not using built-in)
-    // Create mint and token accounts
-    // Test your program's token operations
-}
-```
-
-<Callout type="tip">
-  LiteSVM includes SPL Token programs by default, so you don't need to deploy
-  them manually.
-</Callout>
-
-## Performance Testing
-
-Measure and optimize your program's performance:
-
-```rust
-#[test]
-fn test_performance() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-
-    let start = std::time::Instant::now();
-
-    // Run multiple transactions
-    for i in 0..100 {
-        let tx = create_test_transaction(i);
-        svm.send_transaction(tx).unwrap();
-    }
-
-    let duration = start.elapsed();
-    println!("100 transactions in {:?}", duration);
-
-    // Ensure performance requirements are met
-    assert!(duration.as_secs() < 1);
-}
-```
+Full detailed information for this crate can be found in the **[Testing with SPL Tokens](/docs/testing-with-spl-tokens)** section.
 
 ## Next Steps
 
