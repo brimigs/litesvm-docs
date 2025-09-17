@@ -13,11 +13,6 @@ export function baseOptions(): BaseLayoutProps {
       title: 'LiteSVM Docs',
     },
     githubUrl: 'https://github.com/LiteSVM/litesvm',
-    links: [
-      {
-        text: 'GitHub',
-        url: 'https://github.com/LiteSVM/litesvm',
-      },
-    ],
+    links: [],
   };
 }

@@ -28,70 +28,45 @@ In Solana, creating token accounts requires two separate instructions due to the
 <Steps>
 <Step>
 **System Program creates the account**
-
-The System Program allocates space on the blockchain and assigns ownership:
-
-```rust
-let create_account_ix = system_instruction::create_account(
-    &payer.pubkey(),
-    &mint.pubkey(),
-    rent,                    // Lamports for rent-exemption
-    Mint::LEN as u64,        // 82 bytes for mint data
-    &spl_token::id(),        // Token Program will own it
-);
-```
-
-This creates a "blank" account that exists but has uninitialized data.
-
+- Allocates space on the blockchain
+- Assigns ownership to Token Program
+- Transfers rent-exempt lamports
 </Step>
 
 <Step>
-**Token Program initializes the data**
-
-The Token Program writes the actual mint/token data:
-
-```rust
-let init_mint_ix = spl_token::instruction::initialize_mint(
-    &spl_token::id(),
-    &mint.pubkey(),
-    &mint_authority.pubkey(),
-    None,                    // Optional freeze authority
-    decimals,
-)?;
-```
-
-This writes the mint configuration into the allocated space.
-
-</Step>
-
-<Step>
-**Send both in one transaction**
-
-Both instructions must be sent together, in order:
-
-```rust
-let tx = Transaction::new_signed_with_payer(
-    &[create_account_ix, init_mint_ix],  // Order matters!
-    Some(&payer.pubkey()),
-    &[&payer, &mint],
-    svm.latest_blockhash(),
-);
-```
-
+**Token Program initializes the account**
+- Sets the mint (which token type)
+- Sets the owner (who controls the tokens)
+- Initializes amount to 0
 </Step>
 </Steps>
 
-<Callout type="warning">
-  The Token Program cannot create accounts - it can only work with accounts that
-  already exist and are owned by it. Attempting to initialize without creating
-  first will result in an `AccountNotFound` error.
+This separation ensures security and modularity - the System Program handles SOL and account creation, while the Token Program handles all token-specific logic.
+
+### Associated Token Accounts
+
+Associated Token Accounts (ATAs) simplify this process:
+
+```rust
+// Manual token account creation requires:
+// 1. Generate keypair for the account
+// 2. Calculate space needed
+// 3. Create account with System Program
+// 4. Initialize with Token Program
+
+// ATA creation is simpler:
+// - Deterministic address (no keypair needed)
+// - Single instruction handles both steps
+// - Same address every time for owner+mint combination
+```
+
+<Callout type="tip">
+**Best Practice**: Always use Associated Token Accounts unless you have a specific reason not to. They're deterministic, easier to manage, and prevent common errors.
 </Callout>
 
-## Using litesvm-token
+## Basic Setup
 
-The litesvm-token crate simplifies these patterns with helper functions:
-
-### Basic Setup
+Here's how to set up a basic token testing environment:
 
 ```rust
 use litesvm::LiteSVM;
@@ -109,121 +84,51 @@ fn test_token_operations() {
     // Create and fund payer
     let payer = Keypair::new();
     svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+
+    // Ready for token operations!
 }
 ```
 
-### Creating a Token Mint
+## Quick Example
+
+Here's a complete example of creating a token mint and minting tokens:
 
 ```rust
-use litesvm_token::CreateMint;
+use litesvm::LiteSVM;
+use litesvm_token::{CreateMint, CreateAssociatedTokenAccount, MintTo};
+use solana_sdk::signature::{Keypair, Signer};
 
 #[test]
-fn test_create_mint() {
+fn test_create_and_mint_tokens() {
     let mut svm = LiteSVM::new();
+
+    // Setup accounts
     let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
-    // Create mint with litesvm-token
-    let mint = Keypair::new();
-    let mint_authority = Keypair::new();
-
-    svm.create_mint(
-        &payer,
-        &mint,
-        &mint_authority.pubkey(),
-        None,  // No freeze authority
-        9,     // 9 decimals (like SOL)
-    ).unwrap();
-
-    // Verify mint was created
-    let mint_account = svm.get_account(&mint.pubkey()).unwrap();
-    assert_eq!(mint_account.owner, spl_token::id());
-
-    // Parse mint data
-    let mint_data = spl_token::state::Mint::unpack(&mint_account.data).unwrap();
-    assert_eq!(mint_data.decimals, 9);
-    assert_eq!(mint_data.supply, 0);
-    assert_eq!(mint_data.mint_authority.unwrap(), mint_authority.pubkey());
-}
-```
-
-### Creating Associated Token Accounts
-
-Associated Token Accounts (ATAs) are special because they handle both creation and initialization internally:
-
-```rust
-use litesvm_token::CreateAssociatedTokenAccount;
-use spl_associated_token_account::get_associated_token_address;
-
-#[test]
-fn test_create_ata() {
-    let mut svm = LiteSVM::new();
-    let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
-    // Create mint first
-    let mint = Keypair::new();
-    let mint_authority = Keypair::new();
-    svm.create_mint(&payer, &mint, &mint_authority.pubkey(), None, 9).unwrap();
-
-    // Create ATA for a user
-    let user = Keypair::new();
-    let user_ata = svm.create_associated_token_account(
-        &payer,
-        &user.pubkey(),
-        &mint.pubkey(),
-    ).unwrap();
-
-    // Verify ATA address is deterministic
-    let expected_ata = get_associated_token_address(
-        &user.pubkey(),
-        &mint.pubkey(),
-    );
-    assert_eq!(user_ata, expected_ata);
-
-    // Verify account exists and is initialized
-    let ata_account = svm.get_account(&user_ata).unwrap();
-    assert_eq!(ata_account.owner, spl_token::id());
-
-    let token_account = spl_token::state::Account::unpack(&ata_account.data).unwrap();
-    assert_eq!(token_account.mint, mint.pubkey());
-    assert_eq!(token_account.owner, user.pubkey());
-    assert_eq!(token_account.amount, 0);
-}
-```
-
-<Callout type="info">
-  ATAs are deterministic - the same owner and mint will always produce the same
-  ATA address. This makes them ideal for testing as you don't need to track
-  account addresses.
-</Callout>
-
-### Minting Tokens
-
-```rust
-use litesvm_token::MintTo;
-
-#[test]
-fn test_mint_tokens() {
-    let mut svm = LiteSVM::new();
-    let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
-    // Setup mint and ATA
     let mint = Keypair::new();
     let mint_authority = Keypair::new();
     let recipient = Keypair::new();
 
-    svm.create_mint(&payer, &mint, &mint_authority.pubkey(), None, 9).unwrap();
+    // Fund the payer
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+
+    // Create mint with 9 decimals (like SOL)
+    svm.create_mint(
+        &payer,
+        &mint,
+        &mint_authority.pubkey(),
+        None, // No freeze authority
+        9,    // Decimals
+    ).unwrap();
+
+    // Create recipient's token account
     let recipient_ata = svm.create_associated_token_account(
         &payer,
         &recipient.pubkey(),
         &mint.pubkey(),
     ).unwrap();
 
-    // Mint 1000 tokens (accounting for decimals)
-    let amount = 1000 * 10_u64.pow(9); // 1000 tokens with 9 decimals
-
+    // Mint 100 tokens
+    let amount = 100 * 10_u64.pow(9); // Account for decimals
     svm.mint_to(
         &payer,
         &mint.pubkey(),
@@ -239,113 +144,57 @@ fn test_mint_tokens() {
 }
 ```
 
-### Token Transfers
+## Key Concepts
+
+### Token Decimals
+
+Most tokens use decimals to represent fractional amounts:
 
 ```rust
-use litesvm_token::Transfer;
+// SOL has 9 decimals
+let one_sol = 10_u64.pow(9);  // 1_000_000_000 lamports
 
-#[test]
-fn test_token_transfer() {
-    let mut svm = LiteSVM::new();
-    let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+// USDC has 6 decimals
+let one_usdc = 10_u64.pow(6); // 1_000_000 micro-USDC
 
-    // Setup
-    let mint = Keypair::new();
-    let mint_authority = Keypair::new();
-    let sender = Keypair::new();
-    let recipient = Keypair::new();
-
-    svm.create_mint(&payer, &mint, &mint_authority.pubkey(), None, 9).unwrap();
-
-    // Create ATAs
-    let sender_ata = svm.create_associated_token_account(
-        &payer,
-        &sender.pubkey(),
-        &mint.pubkey(),
-    ).unwrap();
-
-    let recipient_ata = svm.create_associated_token_account(
-        &payer,
-        &recipient.pubkey(),
-        &mint.pubkey(),
-    ).unwrap();
-
-    // Mint tokens to sender
-    let initial_amount = 1000 * 10_u64.pow(9);
-    svm.mint_to(
-        &payer,
-        &mint.pubkey(),
-        &sender_ata,
-        &mint_authority,
-        initial_amount,
-    ).unwrap();
-
-    // Transfer tokens
-    let transfer_amount = 250 * 10_u64.pow(9);
-    svm.transfer(
-        &payer,
-        &sender_ata,
-        &recipient_ata,
-        &sender,
-        transfer_amount,
-    ).unwrap();
-
-    // Verify balances
-    let sender_account = svm.get_account(&sender_ata).unwrap();
-    let sender_balance = spl_token::state::Account::unpack(&sender_account.data)
-        .unwrap()
-        .amount;
-    assert_eq!(sender_balance, initial_amount - transfer_amount);
-
-    let recipient_account = svm.get_account(&recipient_ata).unwrap();
-    let recipient_balance = spl_token::state::Account::unpack(&recipient_account.data)
-        .unwrap()
-        .amount;
-    assert_eq!(recipient_balance, transfer_amount);
-}
+// Always account for decimals in calculations
+let amount_tokens = 100;
+let amount_raw = amount_tokens * 10_u64.pow(decimals as u32);
 ```
 
-## Complete Testing Example
+### Account Relationships
 
-Here's a comprehensive example testing a program that interacts with SPL tokens:
+Understanding the relationships between accounts is crucial:
+
+- **Mint Account**: Defines the token (supply, decimals, authorities)
+- **Token Account**: Holds tokens for a specific owner
+- **Associated Token Account**: Deterministic token account for an owner+mint pair
+- **Mint Authority**: Can create new tokens
+- **Freeze Authority**: Can freeze token accounts (optional)
+
+## Common Patterns
+
+### Testing Helper Pattern
+
+Create a test context to reduce boilerplate:
 
 ```rust
-use litesvm::LiteSVM;
-use litesvm_token::{CreateMint, CreateAssociatedTokenAccount, MintTo};
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    transaction::Transaction,
-};
-use spl_associated_token_account::get_associated_token_address;
-
-struct TokenTestContext {
+struct TestContext {
     svm: LiteSVM,
     payer: Keypair,
     mint: Pubkey,
     mint_authority: Keypair,
-    program_id: Pubkey,
 }
 
-impl TokenTestContext {
+impl TestContext {
     fn new() -> Self {
         let mut svm = LiteSVM::new();
-
-        // Deploy your program
-        let program_id = Pubkey::new_unique();
-        let program_bytes = include_bytes!("../target/deploy/my_program.so");
-        svm.add_program(program_id, program_bytes);
-
-        // Setup payer
         let payer = Keypair::new();
-        svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
-        // Create mint
         let mint_keypair = Keypair::new();
         let mint_authority = Keypair::new();
 
+        // Setup
+        svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
         svm.create_mint(
             &payer,
             &mint_keypair,
@@ -359,21 +208,17 @@ impl TokenTestContext {
             payer,
             mint: mint_keypair.pubkey(),
             mint_authority,
-            program_id,
         }
     }
 
     fn create_user_with_tokens(&mut self, amount: u64) -> (Keypair, Pubkey) {
         let user = Keypair::new();
-
-        // Create ATA
         let user_ata = self.svm.create_associated_token_account(
             &self.payer,
             &user.pubkey(),
             &self.mint,
         ).unwrap();
 
-        // Mint tokens
         if amount > 0 {
             self.svm.mint_to(
                 &self.payer,
@@ -387,170 +232,31 @@ impl TokenTestContext {
         (user, user_ata)
     }
 }
-
-#[test]
-fn test_program_token_swap() {
-    let mut ctx = TokenTestContext::new();
-
-    // Create two users with tokens
-    let (user_a, user_a_ata) = ctx.create_user_with_tokens(1000 * 10_u64.pow(9));
-    let (user_b, user_b_ata) = ctx.create_user_with_tokens(500 * 10_u64.pow(9));
-
-    // Create program instruction for token swap
-    let swap_instruction = Instruction {
-        program_id: ctx.program_id,
-        accounts: vec![
-            AccountMeta::new(user_a_ata, false),
-            AccountMeta::new(user_b_ata, false),
-            AccountMeta::new_readonly(user_a.pubkey(), true),
-            AccountMeta::new_readonly(user_b.pubkey(), true),
-            AccountMeta::new_readonly(spl_token::id(), false),
-        ],
-        data: vec![0], // Swap instruction discriminator
-    };
-
-    // Execute swap
-    let tx = Transaction::new_signed_with_payer(
-        &[swap_instruction],
-        Some(&ctx.payer.pubkey()),
-        &[&ctx.payer, &user_a, &user_b],
-        ctx.svm.latest_blockhash(),
-    );
-
-    let result = ctx.svm.send_transaction(tx).unwrap();
-
-    // Verify swap occurred
-    println!("Swap transaction logs:");
-    for log in &result.logs {
-        println!("  {}", log);
-    }
-
-    // Check final balances
-    let user_a_balance = {
-        let account = ctx.svm.get_account(&user_a_ata).unwrap();
-        spl_token::state::Account::unpack(&account.data).unwrap().amount
-    };
-
-    let user_b_balance = {
-        let account = ctx.svm.get_account(&user_b_ata).unwrap();
-        spl_token::state::Account::unpack(&account.data).unwrap().amount
-    };
-
-    println!("User A balance: {}", user_a_balance);
-    println!("User B balance: {}", user_b_balance);
-}
-```
-
-## Common Patterns and Tips
-
-### Working with Decimals
-
-Always account for token decimals in your calculations:
-
-```rust
-// For a token with 9 decimals (like SOL)
-let one_token = 10_u64.pow(9);
-let amount_tokens = 100;
-let amount_with_decimals = amount_tokens * one_token;
-
-// For USDC (6 decimals)
-let one_usdc = 10_u64.pow(6);
-let amount_usdc = 100;
-let amount_with_decimals = amount_usdc * one_usdc;
-```
-
-### Error Testing
-
-Test error conditions to ensure your program handles them correctly:
-
-```rust
-#[test]
-fn test_insufficient_balance() {
-    let mut ctx = TokenTestContext::new();
-    let (sender, sender_ata) = ctx.create_user_with_tokens(100);
-    let (recipient, recipient_ata) = ctx.create_user_with_tokens(0);
-
-    // Try to transfer more than balance
-    let result = ctx.svm.transfer(
-        &ctx.payer,
-        &sender_ata,
-        &recipient_ata,
-        &sender,
-        1000, // More than sender has
-    );
-
-    assert!(result.is_err());
-    // Verify specific error if needed
-}
-```
-
-### Batch Operations
-
-Test multiple operations in a single transaction:
-
-```rust
-#[test]
-fn test_batch_transfers() {
-    let mut ctx = TokenTestContext::new();
-    let (sender, sender_ata) = ctx.create_user_with_tokens(1000);
-
-    // Create multiple recipients
-    let recipients: Vec<_> = (0..3)
-        .map(|_| ctx.create_user_with_tokens(0))
-        .collect();
-
-    // Build transfer instructions
-    let instructions: Vec<_> = recipients
-        .iter()
-        .map(|(_, ata)| {
-            spl_token::instruction::transfer(
-                &spl_token::id(),
-                &sender_ata,
-                ata,
-                &sender.pubkey(),
-                &[],
-                100,
-            ).unwrap()
-        })
-        .collect();
-
-    // Send all transfers in one transaction
-    let tx = Transaction::new_signed_with_payer(
-        &instructions,
-        Some(&ctx.payer.pubkey()),
-        &[&ctx.payer, &sender],
-        ctx.svm.latest_blockhash(),
-    );
-
-    ctx.svm.send_transaction(tx).unwrap();
-}
 ```
 
 ## Best Practices
 
 <Callout type="tip">
-  1. **Always use ATAs when possible** - They're deterministic and easier to
-  work with 2. **Create helper functions** - Reduce boilerplate in your tests 3.
-  **Test edge cases** - Zero amounts, maximum amounts, insufficient balances 4.
-  **Verify state changes** - Always check balances and account data after
-  operations 5. **Use proper decimal handling** - Create constants for token
-  amounts with decimals
+1. **Always use ATAs when possible** - They're deterministic and easier to work with
+2. **Account for decimals** - Create helper functions for token amounts
+3. **Test edge cases** - Zero amounts, maximum amounts, insufficient balances
+4. **Verify state changes** - Always check balances after operations
+5. **Use helper functions** - Reduce test boilerplate with reusable patterns
 </Callout>
 
 ## Troubleshooting
 
-### Common Errors and Solutions
+### Common Errors
 
-| Error                       | Cause                                               | Solution                                |
-| --------------------------- | --------------------------------------------------- | --------------------------------------- |
-| `AccountNotFound`           | Trying to use an account that doesn't exist         | Ensure account is created before use    |
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `AccountNotFound` | Trying to use an account that doesn't exist | Ensure account is created before use |
 | `AccountAlreadyInitialized` | Trying to initialize an already initialized account | Check if account exists before creating |
-| `InsufficientFunds`         | Not enough lamports for rent or tokens for transfer | Ensure sufficient funding/minting       |
-| `OwnerMismatch`             | Account owned by wrong program                      | Verify correct program ID when creating |
-| `InvalidAccountData`        | Corrupted or wrong account data                     | Ensure proper initialization sequence   |
+| `InsufficientFunds` | Not enough lamports for rent or tokens for transfer | Ensure sufficient funding/minting |
+| `OwnerMismatch` | Account owned by wrong program | Verify correct program ID when creating |
 
 ## Next Steps
 
-- **[Examples →](/docs/examples)** - See complete token testing examples
-- **[API Reference →](/docs/api-reference)** - Detailed API documentation
-- **[Advanced →](/docs/advanced)** - Advanced token testing techniques
+- **[Token Operations →](/docs/testing-with-spl-tokens/token-operations)** - Learn about minting, transfers, and other operations
+- **[Basic Examples →](/docs/examples)** - See complete token testing examples
+- **[Advanced Concepts →](/docs/advanced)** - Advanced token testing techniques

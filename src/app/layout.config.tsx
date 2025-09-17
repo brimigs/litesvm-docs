@@ -1,4 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import { Github } from 'lucide-react';
 
 export const baseOptions: BaseLayoutProps = {
   githubUrl: 'https://github.com/LiteSVM/litesvm',
@@ -11,7 +12,8 @@ export const baseOptions: BaseLayoutProps = {
       url: '/docs',
     },
     {
-      text: 'GitHub',
+      icon: <Github />,
+      text: "View LiteSVM's Codebase",
       url: 'https://github.com/LiteSVM/litesvm',
     },
     {
