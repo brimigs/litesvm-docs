@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps<'/docs'>) {
               className="flex items-center gap-2 px-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <Github className="w-4 h-4" />
-              <span>View LiteSVM's Codebase</span>
+              <span>View LiteSVM&apos;s Codebase</span>
             </a>
           </div>
         ),

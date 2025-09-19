@@ -10,7 +10,7 @@ import type { MDXComponents } from 'mdx/types';
 export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
-    pre: ({ ref: _ref, ...props }) => (
+    pre: ({ ...props }) => (
       <CodeBlock {...props}>
         <Pre>{props.children}</Pre>
       </CodeBlock>
