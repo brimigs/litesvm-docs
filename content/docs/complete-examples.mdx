@@ -1,52 +1,49 @@
 ---
-title: Complete Examples
-description: Full example programs using LiteSVM for testing
+title: Complete Github Examples
+description: Solana programs with comprehensive LiteSVM test suites
 ---
 
 import { Card, Cards } from "fumadocs-ui/components/card";
 import { Callout } from "fumadocs-ui/components/callout";
-import { Steps, Step } from "fumadocs-ui/components/steps";
 
-## Example Repositories
+## DeFi Programs
 
-<div className="pt-1 px-6 pb-6 bg-gray-50/50 dark:bg-gray-900/30 rounded-lg border border-gray-200/50 dark:border-gray-800/50">
+These examples use both the `litesvm` crate and the `litesvm-token` crate.
 
-### CRUD Apps
-
-Complete CRUD app implementations using the `litesvm` crate for testing.
-
-<Cards>
-  <Card
-    title="Anchor CRUD App"
-    description="Native Solana escrow program using the lightweight Pinocchio framework with comprehensive LiteSVM tests"
-    href="https://github.com/LiteSVM/litesvm-pinocchio-escrow-example"
-  />
-  <Card
-    title="Native CRUD App"
-    description="Full-featured escrow implementation using the Anchor framework with extensive LiteSVM test coverage"
-    href="https://github.com/LiteSVM/litesvm-anchor-escrow-example"
-  />
-</Cards>
-
-</div>
-
-<div className="pt-1 px-6 pb-6 bg-gray-50/50 dark:bg-gray-900/30 rounded-lg border border-gray-200/50 dark:border-gray-800/50 mt-6">
-
-### Escrow Programs
-
-Complete escrow implementations using the `litesvm` and `litesvm-token` crates for testing.
+### Escrow Systems
 
 <Cards>
   <Card
     title="Pinocchio Escrow"
-    description="Native Solana escrow program using the lightweight Pinocchio framework with comprehensive LiteSVM tests"
+    description="Lightweight escrow using Pinocchio framework"
     href="https://github.com/LiteSVM/litesvm-pinocchio-escrow-example"
   />
   <Card
     title="Anchor Escrow"
-    description="Full-featured escrow implementation using the Anchor framework with extensive LiteSVM test coverage"
+    description="Escrow implementation using Anchor framework"
     href="https://github.com/LiteSVM/litesvm-anchor-escrow-example"
   />
 </Cards>
 
-</div>
+## Data Programs
+
+These examples use just the `litesvm` crate.
+
+### CRUD Applications
+
+<Cards>
+  <Card
+    title="Anchor CRUD"
+    description="Data management with Anchor's type safety"
+    href="https://github.com/LiteSVM/litesvm-anchor-crud-example"
+  />
+  <Card
+    title="Native CRUD"
+    description="Pure Solana SDK implementation"
+    href="https://github.com/LiteSVM/litesvm-native-crud-example"
+  />
+</Cards>
+
+## Contributing
+
+Submit examples at [github.com/LiteSVM/litesvm/issues](https://github.com/LiteSVM/litesvm/issues)
