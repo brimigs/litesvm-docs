@@ -28,40 +28,58 @@ To interact with any other program in your tests, you must deploy that program t
 
 ## Basic Program Deployment
 
-### Method 1: Deploy from Bytes
+### Method 1: Deploy from Bytes (Recommended)
 
-You can also deploy programs directly from byte arrays, useful for embedded test programs:
+Deploy programs directly from byte arrays for fastest test execution:
 
 ```rust
 use litesvm::LiteSVM;
-use solana_pubkey::pubkey;
+use solana_sdk::signature::{read_keypair_file, Signer};
 
 let mut svm = LiteSVM::new();
-let program_id = Pubkey::new_unique();
-let program_bytes = include_bytes!("../target/deploy/program.so");
+
+// Read the program's keypair to get correct ID
+let program_keypair = read_keypair_file("target/deploy/my_program-keypair.json")
+    .expect("Program keypair file not found");
+let program_id = program_keypair.pubkey();
+
+// Include bytes at compile time
+let program_bytes = include_bytes!("../target/deploy/my_program.so");
 
 // Deploy from bytes
-svm.add_program(program_id, program_bytes).unwrap();
+svm.add_program(program_id, program_bytes)
+    .expect("Failed to deploy program");
+
+// Verify deployment
+assert!(svm.get_account(&program_id).is_some(), "Program account not created");
+assert!(svm.get_account(&program_id).unwrap().executable, "Program not executable");
 ```
 
 <Callout type="tip">
   `include_bytes!` embeds the binary directly into the test executable at
-  compile time, so there is no I/O during test execution.{" "}
+  compile time, eliminating I/O during test execution.
 </Callout>
 
 ### Method 2: Deploy from File (.so)
 
-The most common way to deploy a program is using a compiled `.so` file:
+Load programs from the filesystem when they change frequently:
 
 ```rust
 use litesvm::LiteSVM;
-use solana_pubkey::Pubkey;
+use solana_sdk::signature::{read_keypair_file, Signer};
 
 let mut svm = LiteSVM::new();
-let program_id = Pubkey::new_unique();
 
-// Deploy from a .so file
-svm.add_program_from_file(program_id, "path/to/program.so").unwrap();
+// Read keypair for correct program ID
+let program_keypair = read_keypair_file("target/deploy/program-keypair.json")?;
+let program_id = program_keypair.pubkey();
+
+// Deploy from file
+svm.add_program_from_file(program_id, "target/deploy/program.so")
+    .expect("Failed to deploy program from file");
+
+// Always verify
+assert!(svm.get_account(&program_id).unwrap().executable);
 ```
 
 ## Pulling Programs from Mainnet/Devnet
@@ -101,44 +119,156 @@ svm.add_program_from_file(
   - Working with large programs
   - Programs change frequently during development
 
-### 2. Program ID Management
+### Understanding Program Keypairs
 
-```rust
-// Option 1: Deterministic IDs for reproducible tests
-let program_id = pubkey!("YourProgramID111111111111111111111111111111");
+When you build a Solana program:
 
-// Option 2: Random IDs for isolation
-let program_id = Pubkey::new_unique();
-
-// Option 3: Use the same ID as mainnet/devnet
-let program_id = pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-```
+1. **Anchor** creates `target/deploy/program-keypair.json`
+2. **Native** builds create a keypair file alongside the `.so` file
+3. The program's **on-chain address** is derived from this keypair
+4. **PDAs and CPIs** in your program use this specific address
 
 ## Common Issues and Solutions
 
-### Program Not Found Error
+### Silent Deployment Failures
 
-If you get `TransactionError::InvalidProgramForExecution`:
+**Problem**: Program appears to deploy but transactions fail with "InvalidProgramForExecution".
+
+**Cause**: Program ID doesn't match the keypair.
+
+**Solution**:
 
 ```rust
-// Ensure program is deployed before use
-svm.add_program(program_id, &program_bytes).unwrap();
+// Always use the keypair-derived ID
+let keypair = read_keypair_file("target/deploy/program-keypair.json")?;
+let program_id = keypair.pubkey();
 
-// Verify deployment
-assert!(svm.get_account(&program_id).is_some());
-assert!(svm.get_account(&program_id).unwrap().executable);
+svm.add_program(program_id, &program_bytes)?;
+
+// Verify with detailed checks
+let account = svm.get_account(&program_id)
+    .expect("Program account doesn't exist");
+
+assert!(account.executable, "Program not executable");
+assert_eq!(account.owner, solana_sdk::bpf_loader::id(), "Wrong owner");
+assert!(!account.data.is_empty(), "Program data is empty");
+
+println!("✅ Program verified at {}", program_id);
+```
+
+### Program Not Found Error
+
+**Error**: `TransactionError::InvalidProgramForExecution`
+
+**Common Causes**:
+
+1. Program not deployed
+2. Wrong program ID used in instruction
+3. Program ID mismatch with keypair
+
+**Debugging Steps**:
+
+```rust
+// Step 1: Check if program exists
+if let Some(account) = svm.get_account(&program_id) {
+    println!("Program exists");
+    println!("  Executable: {}", account.executable);
+    println!("  Owner: {}", account.owner);
+    println!("  Data length: {}", account.data.len());
+} else {
+    println!("Program does not exist at {}", program_id);
+}
+
+// Step 2: Verify the ID matches keypair
+let expected_keypair = read_keypair_file("target/deploy/program-keypair.json")?;
+let expected_id = expected_keypair.pubkey();
+
+if program_id != expected_id {
+    println!("  ID mismatch!");
+    println!("  Used: {}", program_id);
+    println!("  Expected: {}", expected_id);
+}
+
+// Step 3: Check instruction program ID
+println!("Instruction program_id: {}", instruction.program_id);
+assert_eq!(instruction.program_id, program_id, "Instruction uses wrong program ID");
+```
+
+### CPI to Undeployed Programs
+
+**Problem**: Your program makes CPI calls to programs that aren't deployed.
+
+**Solution**: Deploy all dependency programs:
+
+```rust
+// If your program uses SPL Token
+let token_program = include_bytes!("spl_token.so");
+svm.add_program(spl_token::id(), token_program)?;
+
+// If your program uses Associated Token Account
+let ata_program = include_bytes!("spl_associated_token_account.so");
+svm.add_program(spl_associated_token_account::id(), ata_program)?;
+
+// Verify all required programs
+let required_programs = [
+    (spl_token::id(), "SPL Token"),
+    (spl_associated_token_account::id(), "Associated Token Account"),
+    (your_program_id, "Your Program"),
+];
+
+for (id, name) in &required_programs {
+    assert!(
+        svm.get_account(id).map(|a| a.executable).unwrap_or(false),
+        "{} not deployed at {}",
+        name,
+        id
+    );
+}
 ```
 
 ### Insufficient Lamports for Deployment
 
-Programs need rent-exempt lamports:
+**Note**: LiteSVM automatically handles rent-exempt balance for programs.
 
 ```rust
+// No need to manually fund - LiteSVM handles this
+svm.add_program(program_id, &program_bytes)?;
+
+// But you can check the rent if needed
 let program_len = program_bytes.len();
-let lamports = svm.minimum_balance_for_rent_exemption(program_len);
-// Program account is automatically funded with required lamports
+let required_lamports = svm.minimum_balance_for_rent_exemption(program_len);
+println!("Program requires {} lamports for rent exemption", required_lamports);
 ```
+
+## Deployment Verification Checklist
+
+<Steps>
+<Step>
+**Read the program keypair**
+```rust
+let keypair = read_keypair_file("target/deploy/program-keypair.json")?;
+let program_id = keypair.pubkey();
+```
+</Step>
+
+<Step>
+  **Deploy with matching ID** ```rust svm.add_program(program_id,
+  &program_bytes)?; ```
+</Step>
+
+<Step>
+  **Verify deployment** ```rust
+  assert!(svm.get_account(&program_id).unwrap().executable); ```
+</Step>
+
+<Step>
+**Deploy dependencies**
+```rust
+// Deploy any programs your program calls via CPI
+```
+</Step>
+</Steps>
 
 ## Next Steps
 
-In the next section, we'll learn how to execute program instructions.
+In the next section, we'll learn how to execute program instructions and handle complex transaction patterns.

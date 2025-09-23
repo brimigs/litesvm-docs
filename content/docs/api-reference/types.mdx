@@ -1,0 +1,435 @@
+---
+title: Types & Errors
+description: Type definitions and error handling reference for LiteSVM
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Types & Errors
+
+Complete reference for LiteSVM types, error codes, and error handling patterns.
+
+## Core Types
+
+### `LiteSVM`
+
+The main struct that manages the test environment.
+
+```rust
+pub struct LiteSVM {
+    // Internal implementation
+}
+```
+
+### `TransactionMetadata`
+
+Information returned after successful transaction execution.
+
+```rust
+pub struct TransactionMetadata {
+    pub compute_units_consumed: u64,
+    pub logs: Vec<String>,
+    pub return_data: Option<(Pubkey, Vec<u8>)>,
+}
+```
+
+**Fields**:
+- `compute_units_consumed`: Number of compute units used
+- `logs`: Program execution logs (includes "Program log:" entries)
+- `return_data`: Optional data returned by the program
+
+### `FailedTransactionMetadata`
+
+Information available when a transaction fails.
+
+```rust
+pub struct FailedTransactionMetadata {
+    pub err: TransactionError,
+    pub meta: Option<TransactionMetadata>,
+}
+```
+
+**Fields**:
+- `err`: The specific error that occurred
+- `meta`: Partial metadata (logs, compute units) before failure
+
+### `Account`
+
+Solana account information.
+
+```rust
+pub struct Account {
+    pub lamports: u64,
+    pub data: Vec<u8>,
+    pub owner: Pubkey,
+    pub executable: bool,
+    pub rent_epoch: u64,
+}
+```
+
+## Error Types
+
+### `LiteSVMError`
+
+Main error type for LiteSVM operations.
+
+```rust
+pub enum LiteSVMError {
+    AccountNotFound,
+    InvalidProgramId,
+    IoError(String),
+    SerializationError(String),
+    // Other variants
+}
+```
+
+### `TransactionError`
+
+Errors that can occur during transaction execution.
+
+```rust
+pub enum TransactionError {
+    // Account errors
+    AccountNotFound,
+    InvalidAccountForFee,
+    InsufficientFundsForFee,
+    InvalidAccountIndex,
+    InvalidAccountOwner,
+
+    // Program errors
+    InvalidProgramForExecution,
+    ProgramFailedToComplete,
+    ProgramAccountNotFound,
+
+    // Permission errors
+    PrivilegeEscalation,
+    ReadonlyLamportChange,
+    ReadonlyDataModified,
+    AccountDataSizeChanged,
+
+    // Balance errors
+    InsufficientFunds,
+    UnbalancedInstruction,
+    InvalidRentPayingAccount,
+
+    // Instruction errors
+    InstructionError(u8, InstructionError),
+    MissingSignatureForFee,
+
+    // Other errors
+    BlockhashNotFound,
+    CallChainTooDeep,
+    // ... more variants
+}
+```
+
+## Common Error Patterns
+
+### Privilege Escalation
+
+<Callout type="error">
+  **Most Common Cause**: Account receiving lamports not marked as writable.
+</Callout>
+
+```rust
+// ❌ WRONG - Will cause privilege escalation
+AccountMeta::new_readonly(recipient.pubkey(), false)
+
+// ✅ CORRECT - Account receiving lamports must be writable
+AccountMeta::new(recipient.pubkey(), false)
+```
+
+**Debugging**:
+```rust
+match svm.send_transaction(tx) {
+    Err(TransactionError::PrivilegeEscalation) => {
+        // Check AccountMeta configurations
+        // Ensure all accounts receiving lamports are writable
+    }
+    _ => {}
+}
+```
+
+### Invalid Account Owner
+
+<Callout type="error">
+  **Common Cause**: Token mint not initialized before use.
+</Callout>
+
+```rust
+// Ensure mint is initialized even if not minting tokens
+fn ensure_mint_initialized(svm: &mut LiteSVM, mint: &Keypair) {
+    if svm.get_account(&mint.pubkey()).is_none() {
+        initialize_mint(svm, &authority, mint, 9);
+    }
+}
+```
+
+### Account Not Found
+
+<Callout type="warning">
+  **Common Causes**:
+  - Account not created before use
+  - Wrong derivation for PDAs
+  - ATAs not created before token operations
+</Callout>
+
+```rust
+// Always check account existence
+if svm.get_account(&pubkey).is_none() {
+    // Create account or handle error
+    return Err("Account must be created first");
+}
+```
+
+### Custom Program Errors
+
+Programs can return custom error codes:
+
+```rust
+match svm.send_transaction(tx) {
+    Err(TransactionError::InstructionError(idx, err)) => {
+        match err {
+            InstructionError::Custom(code) => {
+                // Map to your program's error enum
+                match code {
+                    0 => println!("InvalidInstruction"),
+                    1 => println!("InvalidAccountData"),
+                    2 => println!("AccountAlreadyInitialized"),
+                    _ => println!("Unknown error: {}", code),
+                }
+            }
+            _ => println!("Other instruction error: {:?}", err),
+        }
+    }
+    _ => {}
+}
+```
+
+## Error Handling Best Practices
+
+### 1. Comprehensive Error Checking
+
+```rust
+fn process_transaction(svm: &mut LiteSVM, tx: Transaction) -> Result<(), String> {
+    match svm.send_transaction(tx) {
+        Ok(meta) => {
+            println!("✅ Success!");
+            println!("Compute units: {}", meta.compute_units_consumed);
+            Ok(())
+        }
+        Err(err) => {
+            println!("❌ Transaction failed: {:?}", err);
+
+            // Extract detailed information
+            if let Some(meta) = err.meta.as_ref() {
+                println!("\nTransaction logs:");
+                for log in &meta.logs {
+                    println!("  {}", log);
+                }
+                println!("\nCompute units before failure: {}",
+                    meta.compute_units_consumed);
+            }
+
+            Err(format!("Transaction failed: {:?}", err))
+        }
+    }
+}
+```
+
+### 2. Pattern Matching for Specific Errors
+
+```rust
+match svm.send_transaction(tx) {
+    Err(TransactionError::InsufficientFunds) => {
+        // Handle insufficient balance
+        svm.airdrop(&account, 1_000_000_000)?;
+        // Retry transaction
+    }
+    Err(TransactionError::AccountNotFound) => {
+        // Create missing account
+    }
+    Err(TransactionError::PrivilegeEscalation) => {
+        // Fix account permissions
+    }
+    Err(e) => {
+        // Handle other errors
+        return Err(e);
+    }
+    Ok(_) => {}
+}
+```
+
+### 3. Using Simulation for Better Error Messages
+
+```rust
+// Simulate first for better error diagnostics
+match svm.simulate_transaction(&tx) {
+    Err(err) => {
+        println!("Simulation failed: {:?}", err);
+        // Fix issues before sending
+        return Err("Fix simulation errors first");
+    }
+    Ok(info) => {
+        println!("Simulation successful, sending transaction...");
+        svm.send_transaction(tx)?;
+    }
+}
+```
+
+## Account Validation Helpers
+
+### Check Account State
+
+```rust
+fn validate_account(svm: &LiteSVM, pubkey: &Pubkey) -> Result<Account, String> {
+    match svm.get_account(pubkey) {
+        Some(account) => {
+            // Check if account is effectively closed
+            if account.lamports == 0 {
+                return Err("Account has zero balance".into());
+            }
+            if account.data.is_empty() {
+                return Err("Account has no data".into());
+            }
+            Ok(account)
+        }
+        None => Err("Account does not exist".into()),
+    }
+}
+```
+
+### Verify Token Account
+
+```rust
+fn verify_token_account(
+    svm: &LiteSVM,
+    token_account: &Pubkey,
+    expected_owner: &Pubkey,
+    expected_mint: &Pubkey,
+) -> Result<(), String> {
+    let account = svm.get_token_account(token_account)
+        .ok_or("Token account not found")?;
+
+    if account.owner != *expected_owner {
+        return Err(format!(
+            "Wrong owner: expected {}, got {}",
+            expected_owner, account.owner
+        ));
+    }
+
+    if account.mint != *expected_mint {
+        return Err(format!(
+            "Wrong mint: expected {}, got {}",
+            expected_mint, account.mint
+        ));
+    }
+
+    Ok(())
+}
+```
+
+## Transaction Building Types
+
+### `AccountMeta`
+
+Describes how an account is used in an instruction.
+
+```rust
+pub struct AccountMeta {
+    pub pubkey: Pubkey,
+    pub is_signer: bool,
+    pub is_writable: bool,
+}
+```
+
+**Constructor Methods**:
+```rust
+// Writable, signer
+AccountMeta::new(pubkey, true)
+
+// Writable, non-signer
+AccountMeta::new(pubkey, false)
+
+// Read-only, signer
+AccountMeta::new_readonly(pubkey, true)
+
+// Read-only, non-signer
+AccountMeta::new_readonly(pubkey, false)
+```
+
+<Callout type="error">
+  **Critical Rule**: Accounts that receive lamports MUST use `AccountMeta::new()`
+  (writable), even if they're not signers.
+</Callout>
+
+### Account Meta Configuration Rules
+
+```rust
+// 1. Fee payer (always first, writable, signer)
+AccountMeta::new(payer.pubkey(), true)
+
+// 2. Account receiving SOL/tokens (writable)
+AccountMeta::new(recipient.pubkey(), false)
+
+// 3. Account being debited (writable)
+AccountMeta::new(source.pubkey(), true)  // If signer
+AccountMeta::new(source.pubkey(), false) // If PDA
+
+// 4. Mint/Program accounts (usually readonly)
+AccountMeta::new_readonly(mint.pubkey(), false)
+AccountMeta::new_readonly(program_id, false)
+
+// 5. PDA accounts (never signers)
+AccountMeta::new(pda_address, false)      // Writable PDA
+AccountMeta::new_readonly(pda_address, false) // Readonly PDA
+```
+
+## Helper Type: `TokenAccount`
+
+SPL Token account data structure.
+
+```rust
+pub struct TokenAccount {
+    pub mint: Pubkey,
+    pub owner: Pubkey,
+    pub amount: u64,
+    pub delegate: Option<Pubkey>,
+    pub state: AccountState,
+    pub is_native: Option<u64>,
+    pub delegated_amount: u64,
+    pub close_authority: Option<Pubkey>,
+}
+```
+
+**Usage**:
+```rust
+let token_account = svm.get_token_account(&ata).unwrap();
+println!("Balance: {} tokens", token_account.amount);
+println!("Owner: {}", token_account.owner);
+println!("Mint: {}", token_account.mint);
+```
+
+## Configuration Types
+
+### `ComputeBudget`
+
+Configure compute limits for transactions.
+
+```rust
+pub struct ComputeBudget {
+    pub compute_unit_limit: u64,
+    pub heap_size: usize,
+    // Other fields
+}
+```
+
+**Usage**:
+```rust
+let mut svm = LiteSVM::new()
+    .with_compute_budget(ComputeBudget {
+        compute_unit_limit: 200_000,
+        heap_size: 32 * 1024,
+        ..Default::default()
+    });
+```

@@ -1,0 +1,116 @@
+---
+title: API Reference
+description: Complete API documentation for LiteSVM
+---
+
+import { Card, Cards } from "fumadocs-ui/components/card";
+import { Callout } from "fumadocs-ui/components/callout";
+
+# API Reference
+
+Complete reference documentation for all LiteSVM methods, types, and utilities.
+
+<Callout type="info">
+  **Quick Navigation**: Use `Cmd/Ctrl + K` to quickly search for any API method or type.
+</Callout>
+
+## Core APIs
+
+<Cards>
+  <Card
+    title="LiteSVM Core"
+    description="Main LiteSVM struct methods and configuration"
+    href="/docs/api-reference/litesvm"
+  />
+  <Card
+    title="Helper Functions"
+    description="Token operations and utility functions"
+    href="/docs/api-reference/helpers"
+  />
+  <Card
+    title="Types & Errors"
+    description="Type definitions and error handling"
+    href="/docs/api-reference/types"
+  />
+</Cards>
+
+## Quick Method Reference
+
+### Essential Methods
+
+| Method | Description | Return Type |
+|--------|-------------|-------------|
+| `LiteSVM::new()` | Create a new test environment | `LiteSVM` |
+| `send_transaction()` | Execute a transaction | `Result<TransactionMetadata, TransactionError>` |
+| `get_account()` | Retrieve account data | `Option<Account>` |
+| `airdrop()` | Fund an account with lamports | `Result<(), TransactionError>` |
+| `add_program()` | Deploy a program from bytes | `Result<(), LiteSVMError>` |
+
+### Configuration Methods
+
+| Method | Description |
+|--------|-------------|
+| `with_compute_budget()` | Set compute budget limits |
+| `with_sigverify()` | Enable/disable signature verification |
+| `with_blockhash_check()` | Enable/disable blockhash validation |
+| `with_lamports()` | Set initial account balance |
+
+### Helper Functions
+
+| Function | Description | Package |
+|----------|-------------|---------|
+| `CreateMint::new()` | Create a new token mint | `litesvm-token` |
+| `CreateAssociatedTokenAccount` | Create an ATA | `litesvm-token` |
+| `MintTo` | Mint tokens to an account | `litesvm-token` |
+| `Transfer` | Transfer tokens between accounts | `litesvm-token` |
+
+## Common Patterns
+
+### Basic Test Setup
+
+```rust
+use litesvm::LiteSVM;
+use solana_sdk::signature::{Keypair, Signer};
+
+#[test]
+fn test_my_program() {
+    // Create test environment
+    let mut svm = LiteSVM::new();
+
+    // Deploy program
+    let program_id = Pubkey::new_unique();
+    let program_bytes = include_bytes!("../target/deploy/program.so");
+    svm.add_program(program_id, program_bytes).unwrap();
+
+    // Create and fund accounts
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+
+    // Execute transactions...
+}
+```
+
+### Error Handling
+
+```rust
+match svm.send_transaction(tx) {
+    Ok(result) => {
+        println!("Success! Compute units: {}", result.compute_units_consumed);
+        println!("Logs: {:?}", result.logs);
+    }
+    Err(err) => {
+        println!("Transaction failed: {:?}", err);
+        // Access error details
+        if let Some(logs) = err.meta.as_ref().map(|m| &m.logs) {
+            println!("Transaction logs: {:?}", logs);
+        }
+    }
+}
+```
+
+## See Also
+
+- [Getting Started Guide](/docs/getting-started) - Quick introduction to LiteSVM
+- [Core Concepts](/docs/core-concepts) - Understanding how LiteSVM works
+- [Troubleshooting](/docs/troubleshooting) - Common errors and solutions
+- [Best Practices](/docs/best-practices) - Recommended patterns and tips

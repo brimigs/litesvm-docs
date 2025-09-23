@@ -1,0 +1,9 @@
+{
+  "title": "API Reference",
+  "pages": [
+    "index",
+    "litesvm",
+    "helpers",
+    "types"
+  ]
+}

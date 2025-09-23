@@ -1,0 +1,420 @@
+---
+title: Troubleshooting
+description: Common errors and their solutions when testing with LiteSVM
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+# Troubleshooting Guide
+
+This guide covers the most common errors encountered when using LiteSVM and their solutions. Each issue includes real error messages, root causes, and tested solutions.
+
+<Callout type="info">
+  **Quick Tip**: Use `Cmd/Ctrl + F` to search for your specific error message.
+</Callout>
+
+## Privilege Escalation Errors
+
+### Error Message
+```
+"4C2FremZTiBeRZ3ZXZWB8Yh6G1w5YakBHzKBHWEnJ3VP's writable privilege escalated"
+Program failed: Cross-program invocation with unauthorized signer or writable account
+```
+
+### Root Causes
+
+1. **Account receiving lamports not marked writable**
+2. **CPI creating accounts without proper permissions**
+3. **Account permissions mismatch between instructions**
+
+### Solutions
+
+<Steps>
+<Step>
+**Check Account Writability**
+
+Any account that receives lamports MUST be marked writable:
+
+```rust
+// ❌ WRONG - Will cause privilege escalation
+AccountMeta::new_readonly(maker.pubkey(), false),
+
+// ✅ CORRECT - Account receiving lamports must be writable
+AccountMeta::new(maker.pubkey(), false),
+```
+</Step>
+
+<Step>
+**Pre-create Associated Token Accounts**
+
+If your program creates ATAs via CPI, pre-create them in tests:
+
+```rust
+// Pre-create ATA to avoid CPI privilege escalation
+use litesvm_token::CreateAssociatedTokenAccount;
+
+let create_ata = CreateAssociatedTokenAccount {
+    funder: &payer.pubkey(),
+    owner: &recipient.pubkey(),
+    mint: &mint.pubkey(),
+    token_program: &spl_token::id(),
+};
+
+svm.send_transaction(create_ata.instruction(&[&payer])).unwrap();
+```
+</Step>
+
+<Step>
+**Debug Account Permissions**
+
+Print account meta configuration to identify the issue:
+
+```rust
+for (i, account) in instruction.accounts.iter().enumerate() {
+    println!("Account {}: {} - writable: {}, signer: {}",
+        i,
+        account.pubkey,
+        account.is_writable,
+        account.is_signer
+    );
+}
+```
+</Step>
+</Steps>
+
+### Complete Working Example
+
+```rust
+// Correct account meta setup for escrow-like programs
+let accounts = vec![
+    AccountMeta::new(maker.pubkey(), true),          // Signer + Writable (pays fees)
+    AccountMeta::new(taker.pubkey(), false),         // Writable (receives lamports)
+    AccountMeta::new(escrow_pda, false),             // Writable PDA
+    AccountMeta::new_readonly(mint.pubkey(), false), // Read-only mint
+    AccountMeta::new(vault.pubkey(), false),         // Writable vault
+];
+```
+
+## Invalid Owner Errors
+
+### Error Message
+```
+TransactionError::InvalidAccountOwner
+custom program error: 0x0 (InvalidOwner)
+```
+
+### Root Cause
+
+**Uninitialized token mints** - ALL mints must be initialized before use, even if you're not minting tokens.
+
+### Solution
+
+Always initialize mints before any token operations:
+
+```rust
+fn initialize_all_mints(svm: &mut LiteSVM, authority: &Keypair, mints: &[Keypair]) {
+    for mint in mints {
+        let mint_rent = svm.minimum_balance_for_rent_exemption(82);
+
+        let create_account_ix = system_instruction::create_account(
+            &authority.pubkey(),
+            &mint.pubkey(),
+            mint_rent,
+            82,
+            &spl_token::id(),
+        );
+
+        let init_mint_ix = spl_token::instruction::initialize_mint(
+            &spl_token::id(),
+            &mint.pubkey(),
+            &authority.pubkey(),
+            None,
+            9, // decimals
+        ).unwrap();
+
+        let tx = Transaction::new_signed_with_payer(
+            &[create_account_ix, init_mint_ix],
+            Some(&authority.pubkey()),
+            &[authority, mint],
+            svm.latest_blockhash(),
+        );
+
+        svm.send_transaction(tx).unwrap();
+    }
+}
+
+// Use it before your tests
+initialize_all_mints(&mut svm, &authority, &[mint_a, mint_b]);
+```
+
+<Callout type="error">
+  **Critical**: This is the #1 cause of test failures. Always initialize ALL mints
+  referenced in your instructions, even if they're not actively used.
+</Callout>
+
+## Program Deployment Failures
+
+### Silent Failures
+
+Program appears to deploy but doesn't work correctly.
+
+### Root Cause
+
+**Program ID doesn't match the keypair** used to generate it.
+
+### Solution
+
+```rust
+// ✅ CORRECT - Read the keypair and use its pubkey
+use solana_sdk::signature::read_keypair_file;
+
+let program_keypair = read_keypair_file("target/deploy/program-keypair.json")
+    .expect("Failed to read program keypair");
+let program_id = program_keypair.pubkey();
+
+let program_bytes = include_bytes!("../target/deploy/program.so");
+svm.add_program(program_id, program_bytes).unwrap();
+
+// Always verify deployment
+let account = svm.get_account(&program_id).unwrap();
+assert!(account.executable, "Program not deployed correctly");
+```
+
+<Callout type="warning">
+  **Never** use `Pubkey::new_unique()` for program IDs unless you're certain
+  the program doesn't rely on a specific address.
+</Callout>
+
+## Account Not Found Errors
+
+### Error Message
+```
+TransactionError::AccountNotFound
+```
+
+### Common Causes
+
+1. **Account doesn't exist**
+2. **Wrong PDA derivation**
+3. **Associated Token Account not created**
+
+### Solutions
+
+#### 1. Check Account Existence
+
+```rust
+// Always verify accounts exist before operations
+if svm.get_account(&account_pubkey).is_none() {
+    println!("Account {} does not exist!", account_pubkey);
+    // Create the account or handle the error
+}
+```
+
+#### 2. Verify PDA Derivation
+
+```rust
+// Ensure consistent PDA derivation
+let (pda, bump) = Pubkey::find_program_address(
+    &[b"escrow", maker.pubkey().as_ref()],
+    &program_id,
+);
+
+// Debug: Print the derived address
+println!("Expected PDA: {}, Bump: {}", pda, bump);
+```
+
+#### 3. Create Associated Token Accounts
+
+```rust
+use spl_associated_token_account::get_associated_token_address;
+
+// Get the deterministic ATA address
+let ata = get_associated_token_address(&owner.pubkey(), &mint.pubkey());
+
+// Check if it exists
+if svm.get_account(&ata).is_none() {
+    // Create it
+    let create_ata = CreateAssociatedTokenAccount {
+        funder: &payer.pubkey(),
+        owner: &owner.pubkey(),
+        mint: &mint.pubkey(),
+        token_program: &spl_token::id(),
+    };
+    svm.send_transaction(create_ata.instruction(&[&payer])).unwrap();
+}
+```
+
+## Account Closing Issues
+
+### Problem
+
+Accounts don't appear to close properly in tests.
+
+### Understanding LiteSVM Behavior
+
+LiteSVM may not fully remove accounts when closed, instead setting them to zero lamports.
+
+### Solution
+
+```rust
+fn verify_account_closed(svm: &LiteSVM, address: &Pubkey) -> bool {
+    match svm.get_account(address) {
+        None => true, // Fully removed - ideal
+        Some(account) => {
+            // Check if effectively closed
+            account.lamports == 0 ||
+            account.data.is_empty() ||
+            account.data.get(0) == Some(&0xff) // Anchor's closed account discriminator
+        }
+    }
+}
+
+// Use in tests
+assert!(verify_account_closed(&svm, &escrow_account), "Account not closed");
+```
+
+## Custom Program Errors
+
+### Error Message
+```
+custom program error: 0x1
+```
+
+### Solution
+
+Map error codes to your program's error enum:
+
+```rust
+fn decode_program_error(err: &TransactionError) -> String {
+    match err {
+        TransactionError::InstructionError(_, InstructionError::Custom(code)) => {
+            match *code {
+                0 => "InvalidInstruction".to_string(),
+                1 => "InvalidAccountData".to_string(),
+                2 => "AccountAlreadyInitialized".to_string(),
+                3 => "InsufficientFunds".to_string(),
+                // Add your program's error codes
+                _ => format!("Unknown error code: {}", code),
+            }
+        }
+        _ => format!("{:?}", err),
+    }
+}
+
+// Use in error handling
+match svm.send_transaction(tx) {
+    Err(err) => {
+        println!("Error: {}", decode_program_error(&err));
+    }
+    Ok(_) => {}
+}
+```
+
+## Insufficient Account Keys
+
+### Error Message
+```
+NotEnoughAccountKeys
+```
+
+### Cause
+
+Instruction expects more accounts than provided.
+
+### Solution
+
+```rust
+// Check your program's expected accounts
+// Some programs expect padding accounts even if unused
+
+let accounts = vec![
+    AccountMeta::new(account1.pubkey(), true),
+    AccountMeta::new(account2.pubkey(), false),
+    // ... all required accounts ...
+
+    // Some programs expect system program or token program
+    AccountMeta::new_readonly(system_program::id(), false),
+    AccountMeta::new_readonly(spl_token::id(), false),
+];
+```
+
+## Debugging Transaction Failures
+
+### Comprehensive Error Analysis
+
+```rust
+fn debug_transaction_failure(err: TransactionError) {
+    println!("\n=== Transaction Failed ===");
+    println!("Error: {:?}", err);
+
+    if let Some(meta) = err.meta.as_ref() {
+        println!("\n--- Transaction Logs ---");
+        for log in &meta.logs {
+            // Highlight program logs
+            if log.starts_with("Program log:") {
+                println!("  📝 {}", log);
+            } else if log.contains("failed") || log.contains("error") {
+                println!("  ❌ {}", log);
+            } else {
+                println!("  {}", log);
+            }
+        }
+
+        println!("\n--- Compute Units ---");
+        println!("  Used: {}", meta.compute_units_consumed);
+    }
+
+    println!("\n=== Debug Suggestions ===");
+    match err {
+        TransactionError::PrivilegeEscalation => {
+            println!("  • Check account writability");
+            println!("  • Verify CPI permissions");
+            println!("  • Pre-create token accounts");
+        }
+        TransactionError::InvalidAccountOwner => {
+            println!("  • Initialize all mints");
+            println!("  • Check token account initialization");
+        }
+        TransactionError::AccountNotFound => {
+            println!("  • Verify account creation order");
+            println!("  • Check PDA derivation");
+            println!("  • Ensure ATAs are created");
+        }
+        _ => {
+            println!("  • Check the API reference for this error");
+        }
+    }
+}
+```
+
+## Quick Reference: Common Fixes
+
+| Error | Quick Fix |
+|-------|-----------|
+| Privilege Escalation | Mark accounts receiving lamports as writable |
+| InvalidOwner | Initialize all mints before use |
+| Program not found | Ensure program ID matches keypair |
+| AccountNotFound | Create accounts in correct order |
+| Custom error 0x1 | Check your program's error enum |
+| Silent failures | Add verification after each operation |
+
+## Best Practices for Avoiding Errors
+
+1. **Always initialize mints** - Even if not minting tokens
+2. **Verify deployments** - Check executable flag after `add_program()`
+3. **Pre-create ATAs** - Before your program creates them via CPI
+4. **Check account existence** - Before any operations
+5. **Mark accounts writable** - When they receive lamports
+6. **Use correct program IDs** - Match keypair-derived addresses
+7. **Add logging** - Print account states during debugging
+8. **Simulate first** - Use `simulate_transaction()` before sending
+
+## Getting Help
+
+If you encounter an issue not covered here:
+
+1. Check the [API Reference](/docs/api-reference) for detailed method documentation
+2. Review the [Complete Examples](/docs/complete-examples) for working code
+3. Search the error message in this guide
+4. Report issues at the [LiteSVM GitHub repository](https://github.com/LiteSVM/litesvm)
