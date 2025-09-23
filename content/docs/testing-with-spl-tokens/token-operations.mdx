@@ -316,15 +316,3 @@ fn test_insufficient_balance_error() {
     }
 }
 ```
-
-## Best Practices
-
-<Callout type="info">
-**Always check transaction results**: Token operations can fail for various reasons (insufficient balance, wrong authority, frozen accounts). Always verify transaction success and handle errors appropriately.
-</Callout>
-
-1. **Use Associated Token Accounts**: They're deterministic and easier to manage
-2. **Handle decimals correctly**: Always account for token decimals in calculations
-3. **Batch operations**: Group multiple instructions in single transactions when possible
-4. **Test error cases**: Ensure your program handles invalid operations gracefully
-5. **Clean up in tests**: Reset state between tests or use fresh LiteSVM instances
