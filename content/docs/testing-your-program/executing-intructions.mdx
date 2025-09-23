@@ -120,59 +120,6 @@ let versioned_tx = VersionedTransaction::try_new(
 let result = svm.send_transaction(versioned_tx);
 ```
 
-### Address Lookup Tables (V0 Transactions)
-
-```rust
-use solana_message::v0::Message as MessageV0;
-use solana_message::AddressLookupTableAccount;
-
-// Create lookup table first
-let (create_lut_ix, lut_address) = create_lookup_table(
-    payer.pubkey(),
-    payer.pubkey(),
-    0
-);
-
-// Add addresses to lookup table
-let extend_ix = extend_lookup_table(
-    lut_address,
-    payer.pubkey(),
-    Some(payer.pubkey()),
-    vec![account_to_lookup],
-);
-
-// Execute lookup table setup
-let setup_tx = Transaction::new(
-    &[&payer],
-    Message::new(&[create_lut_ix, extend_ix], Some(&payer.pubkey())),
-    svm.latest_blockhash(),
-);
-svm.send_transaction(setup_tx).unwrap();
-
-// Advance slot (lookup tables can't be used in same slot)
-svm.warp_to_slot(1);
-
-// Use lookup table in V0 message
-let alta = AddressLookupTableAccount {
-    key: lut_address,
-    addresses: vec![account_to_lookup],
-};
-
-let v0_msg = MessageV0::try_compile(
-    &payer.pubkey(),
-    &[instruction],
-    &[alta],  // Lookup tables
-    svm.latest_blockhash(),
-).unwrap();
-
-let v0_tx = VersionedTransaction::try_new(
-    VersionedMessage::V0(v0_msg),
-    &[&payer]
-).unwrap();
-
-svm.send_transaction(v0_tx).unwrap();
-```
-
 ## Transaction Results
 
 ### Successful Transaction
@@ -309,7 +256,6 @@ use solana_compute_budget::compute_budget::ComputeBudget;
 let mut svm = LiteSVM::new()
     .with_compute_budget(ComputeBudget {
         compute_unit_limit: 200_000,
-        heap_size: 32 * 1024,
         ..Default::default()
     });
 ```
@@ -424,32 +370,6 @@ let create_ix = create_account(
     space as u64,
     &owner_program_id,
 );
-```
-
-## SPL Token Instructions
-
-When using SPL Token (included by default):
-
-```rust
-use spl_token::instruction as token_instruction;
-
-// Create token transfer instruction
-let transfer_ix = token_instruction::transfer(
-    &spl_token::id(),
-    &source_account,
-    &destination_account,
-    &authority_pubkey,
-    &[],  // Additional signers
-    amount,
-).unwrap();
-
-// Initialize token account
-let init_ix = token_instruction::initialize_account(
-    &spl_token::id(),
-    &token_account_pubkey,
-    &mint_pubkey,
-    &owner_pubkey,
-).unwrap();
 ```
 
 ## Best Practices
