@@ -171,16 +171,12 @@ fn test_pda_creation() {
         &program_id
     );
 
-    // Create instruction that will create the PDA
-    let instruction = create_pda_instruction(pda, bump);
-
-    // Send transaction
-    let tx = build_transaction(instruction, &payer, &svm);
-    svm.send_transaction(tx).unwrap();
-
     // Verify PDA was created
     let pda_account = svm.get_account(&pda).unwrap();
-    assert_eq!(pda_account.owner, program_id);
+
+    // Verify PDA account properties
+    let pda_account = svm.get_account(&pda).unwrap();
+    assert_eq!(pda_account.owner, program_id, "PDA owner should be the program");
 }
 ```
 
