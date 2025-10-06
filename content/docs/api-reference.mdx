@@ -1,14 +1,10 @@
 ---
-title: Advanced Concepts
-description: Advanced LiteSVM features and custom configurations
+title: API Reference
+description: API reference for LiteSVM methods and configuration options
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
-import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
-
-# Advanced Concepts
-
-Deep dive into advanced features and custom configurations.
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 ## Custom Configuration
 
@@ -34,13 +30,13 @@ let mut svm = LiteSVM::default()
 
 ### Configuration Options
 
-| Option | Purpose | Default |
-|--------|---------|---------|
-| `with_compute_budget()` | Set compute limits | 200,000 units |
-| `with_sigverify()` | Enable signature verification | true |
-| `with_blockhash_check()` | Enable blockhash validation | true |
-| `with_transaction_history()` | Keep transaction history | 0 |
-| `with_lamports()` | Initial lamports for fees | 1,000,000,000 |
+| Option                       | Purpose                       | Default       |
+| ---------------------------- | ----------------------------- | ------------- |
+| `with_compute_budget()`      | Set compute limits            | 200,000 units |
+| `with_sigverify()`           | Enable signature verification | true          |
+| `with_blockhash_check()`     | Enable blockhash validation   | true          |
+| `with_transaction_history()` | Keep transaction history      | 0             |
+| `with_lamports()`            | Initial lamports for fees     | 1,000,000,000 |
 
 ## Time Manipulation
 
@@ -246,7 +242,8 @@ let mut svm = LiteSVM::default()
     .with_sigverify(false);
 
 // Transactions with invalid signatures will still execute
-```
+
+````
 </Tab>
 
 <Tab value="No Blockhash Check">
@@ -256,7 +253,8 @@ let mut svm = LiteSVM::default()
     .with_blockhash_check(false);
 
 // Can use any blockhash, even expired ones
-```
+````
+
 </Tab>
 
 <Tab value="Allow Duplicates">
@@ -266,7 +264,8 @@ let mut svm = LiteSVM::default()
     .with_transaction_history(0);
 
 // Same transaction can be sent multiple times
-```
+
+````
 </Tab>
 </Tabs>
 
@@ -304,7 +303,7 @@ fn test_2() {
     let mut svm = setup();
     // test...
 }
-```
+````
 
 ### Use Include Bytes
 
@@ -368,7 +367,7 @@ match result {
 let result = svm.send_transaction(tx).unwrap();
 
 // Check for specific log message
-assert!(result.logs.iter().any(|log| 
+assert!(result.logs.iter().any(|log|
     log.contains("Transfer successful")
 ));
 
@@ -425,7 +424,8 @@ proptest! {
 ```
 
 <Callout type="tip">
-  LiteSVM's deterministic execution makes it perfect for property-based testing - the same inputs always produce the same outputs.
+  LiteSVM's deterministic execution makes it perfect for property-based testing
+  - the same inputs always produce the same outputs.
 </Callout>
 
 ## Common Gotchas

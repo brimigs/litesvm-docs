@@ -7,90 +7,115 @@ import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Steps, Step } from "fumadocs-ui/components/steps";
 
-# Token Operations
-
-Learn how to perform common token operations including creating mints, minting tokens, and transferring tokens between accounts.
-
-## Creating a Token Mint
+## Create a Token Mint
 
 A mint is the foundation of any SPL token. It defines the token's properties and controls who can mint new tokens.
 
 ```rust
 use litesvm::LiteSVM;
-use litesvm_token::{CreateMint, CreateAssociatedTokenAccount, MintTo, Transfer};
+use litesvm_token::{
+    spl_token::native_mint::DECIMALS,
+    CreateMint,
+};
 use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
     signature::{Keypair, Signer},
-    pubkey::Pubkey,
 };
 
 #[test]
 fn test_create_mint() {
     let mut svm = LiteSVM::new();
-    let authority = Keypair::new();
 
-    // Fund the authority account
-    svm.airdrop(&authority.pubkey(), 10_000_000_000).unwrap();
+    // Create payer account and fund it
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL).unwrap();
 
-    // Create a new mint with 9 decimals (like SOL)
-    let mint = Keypair::new();
-    let decimals = 9;
-
-    let create_mint_ix = CreateMint::new(
-        &mint.pubkey(),
-        &authority.pubkey(),
-        Some(&authority.pubkey()), // freeze authority (optional)
-        decimals,
-    );
-
-    let tx_result = svm.send_transaction(create_mint_ix.instructions(&[&authority, &mint]));
-    assert!(tx_result.is_ok());
+    // Create a new SPL token mint with the payer as the mint authority
+    let mint = CreateMint::new(&mut svm, &payer)
+        .authority(&payer.pubkey())
+        .decimals(DECIMALS)
+        .send()
+        .unwrap();
 }
 ```
 
-## Creating Associated Token Accounts
+## Create a Token Account
 
-Associated Token Accounts (ATAs) are deterministic addresses for holding tokens, making them predictable and easy to work with.
+A token account hold the balance of a specific spl-token for a specific user. To understand the difference between this and an ATA, read [this section](/docs/testing-with-spl-tokens#types-of-token-accounts).
 
 ```rust
+use litesvm::LiteSVM;
+use litesvm_token::{
+    spl_token::native_mint::DECIMALS,
+    CreateMint, CreateAccount,
+};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::{Keypair, Signer},
+};
+
 #[test]
-fn test_create_ata() {
+fn test_create_mint() {
     let mut svm = LiteSVM::new();
-    let owner = Keypair::new();
-    let mint = Keypair::new();
 
-    // Fund and create mint first
-    svm.airdrop(&owner.pubkey(), 10_000_000_000).unwrap();
+    // Create payer account and fund it
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL).unwrap();
 
-    // Create the mint
-    let create_mint_ix = CreateMint::new(
-        &mint.pubkey(),
-        &owner.pubkey(),
-        None,
-        9,
-    );
-    svm.send_transaction(create_mint_ix.instructions(&[&owner, &mint])).unwrap();
+    // Create a new SPL token mint with the payer as the mint authority
+    let mint = CreateMint::new(&mut svm, &payer)
+        .authority(&payer.pubkey())
+        .decimals(DECIMALS)
+        .send()
+        .unwrap();
 
-    // Create ATA for the owner
-    let create_ata_ix = CreateAssociatedTokenAccount {
-        funder: &owner.pubkey(),
-        owner: &owner.pubkey(),
-        mint: &mint.pubkey(),
-        token_program: &spl_token::id(),
-    };
-
-    let tx_result = svm.send_transaction(create_ata_ix.instruction(&[&owner]));
-    assert!(tx_result.is_ok());
-
-    // The ATA address is deterministic
-    let ata = spl_associated_token_account::get_associated_token_address(
-        &owner.pubkey(),
-        &mint.pubkey(),
-    );
-
-    // Verify the account exists
-    let account = svm.get_account(&ata).unwrap();
-    assert!(account.lamports > 0);
+    // Create a token account for the payer
+    // You must have created a Mint Account to be able to create a Token Account
+    let token_account = CreateAccount::new(&mut svm, &payer, &mint)
+        .owner(&payer.pubkey())
+        .send()
+        .unwrap();
 }
+```
+
+## Create an Associated Token Account
+
+Associated Token Accounts (ATAs) are deterministic addresses for holding tokens for a specific user. To understand the difference between this and an ATA, read [this section](/docs/testing-with-spl-tokens#types-of-token-accounts).
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_token::{
+    spl_token::native_mint::DECIMALS,
+    CreateMint, CreateAssociatedTokenAccount,
+};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::{Keypair, Signer},
+};
+
+#[test]
+fn test_create_mint() {
+    let mut svm = LiteSVM::new();
+
+    // Create payer account and fund it
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL).unwrap();
+
+    // Create a new SPL token mint with the payer as the mint authority
+    let mint = CreateMint::new(&mut svm, &payer)
+        .authority(&payer.pubkey())
+        .decimals(DECIMALS)
+        .send()
+        .unwrap();
+
+    // Create an ATA for the payer
+    // You must have created a Mint Account to be able to create a Token Account
+    let associated_token_account = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+        .owner(&alice.pubkey())
+        .send()
+        .unwrap();
+}
+
 ```
 
 ## Minting Tokens
@@ -98,143 +123,124 @@ fn test_create_ata() {
 Once you have a mint and token accounts, you can mint tokens to those accounts.
 
 ```rust
+use litesvm::LiteSVM;
+use litesvm_token::{
+    get_spl_account,
+    spl_token::{native_mint::DECIMALS, state::Account as TokenAccount},
+    CreateAssociatedTokenAccount, CreateMint, MintTo,
+};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::{Keypair, Signer},
+};
+
 #[test]
 fn test_mint_tokens() {
     let mut svm = LiteSVM::new();
-    let authority = Keypair::new();
-    let mint = Keypair::new();
-    let recipient = Keypair::new();
 
-    // Setup: Fund accounts and create mint
-    svm.airdrop(&authority.pubkey(), 10_000_000_000).unwrap();
-    svm.airdrop(&recipient.pubkey(), 10_000_000_000).unwrap();
+    // Create payer account and fund it
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL).unwrap();
 
-    // Create mint
-    let decimals = 6;
-    let create_mint_ix = CreateMint::new(
-        &mint.pubkey(),
-        &authority.pubkey(),
-        None,
-        decimals,
-    );
-    svm.send_transaction(create_mint_ix.instructions(&[&authority, &mint])).unwrap();
+    // Create two users
+    let alice = Keypair::new();
 
-    // Create recipient's token account
-    let create_ata_ix = CreateAssociatedTokenAccount {
-        funder: &recipient.pubkey(),
-        owner: &recipient.pubkey(),
-        mint: &mint.pubkey(),
-        token_program: &spl_token::id(),
-    };
-    svm.send_transaction(create_ata_ix.instruction(&[&recipient])).unwrap();
+    // Create a new SPL token mint with alice as the mint authority
+    let mint = CreateMint::new(&mut svm, &payer)
+        .authority(&alice.pubkey())
+        .decimals(DECIMALS)
+        .send()
+        .unwrap();
 
-    // Mint 1000 tokens (with decimals)
-    let recipient_ata = spl_associated_token_account::get_associated_token_address(
-        &recipient.pubkey(),
-        &mint.pubkey(),
-    );
+    // Create associated token accounts (ATAs) for alice and bob
+    let alice_token_account = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+        .owner(&alice.pubkey())
+        .send()
+        .unwrap();
 
-    let amount = 1000 * 10_u64.pow(decimals as u32); // 1000 tokens
-    let mint_to_ix = MintTo {
-        mint: &mint.pubkey(),
-        destination: &recipient_ata,
-        authority: &authority.pubkey(),
-        amount,
-    };
-
-    let tx_result = svm.send_transaction(mint_to_ix.instruction(&[&authority]));
-    assert!(tx_result.is_ok());
+    // Mint 1000 tokens to Alice's account
+    MintTo::new(&mut svm, &payer, &mint, &alice_token_account, 1000)
+        .owner(&alice)
+        .send()
+        .unwrap();
 
     // Verify balance
-    let token_account = svm.get_token_account(&recipient_ata).unwrap();
-    assert_eq!(token_account.amount, amount);
+    let alice_account: TokenAccount = get_spl_account(&svm, &alice_token_account).unwrap();
+    let alice_balance = alice_account.amount;
+    assert_eq!(alice_balance, 1000);
 }
 ```
 
-## Token Transfers
+## SPL Token Transfers
 
 Transfer tokens between accounts using the Transfer instruction.
 
 ```rust
+use litesvm::LiteSVM;
+use litesvm_token::{
+    get_spl_account,
+    spl_token::{native_mint::DECIMALS, state::Account as TokenAccount},
+    CreateAssociatedTokenAccount, CreateMint, MintTo, Transfer,
+};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::{Keypair, Signer},
+};
+
 #[test]
 fn test_token_transfer() {
-    let mut svm = LiteSVM::new();
-    let authority = Keypair::new();
-    let mint = Keypair::new();
-    let sender = Keypair::new();
-    let recipient = Keypair::new();
+        let mut svm = LiteSVM::new();
 
-    // Setup: Fund all accounts
-    svm.airdrop(&authority.pubkey(), 10_000_000_000).unwrap();
-    svm.airdrop(&sender.pubkey(), 10_000_000_000).unwrap();
-    svm.airdrop(&recipient.pubkey(), 10_000_000_000).unwrap();
+    // Create payer account and fund it
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL).unwrap();
 
-    // Create mint
-    let decimals = 9;
-    let create_mint_ix = CreateMint::new(
-        &mint.pubkey(),
-        &authority.pubkey(),
-        None,
-        decimals,
-    );
-    svm.send_transaction(create_mint_ix.instructions(&[&authority, &mint])).unwrap();
+    // Create two users
+    let alice = Keypair::new();
+    let bob = Keypair::new();
 
-    // Create token accounts for both sender and recipient
-    let sender_ata = spl_associated_token_account::get_associated_token_address(
-        &sender.pubkey(),
-        &mint.pubkey(),
-    );
-    let recipient_ata = spl_associated_token_account::get_associated_token_address(
-        &recipient.pubkey(),
-        &mint.pubkey(),
-    );
+    // Create a new SPL token mint with alice as the mint authority
+    let mint = CreateMint::new(&mut svm, &payer)
+        .authority(&alice.pubkey())
+        .decimals(DECIMALS)
+        .send()
+        .unwrap();
 
-    // Create sender's ATA
-    let create_sender_ata_ix = CreateAssociatedTokenAccount {
-        funder: &sender.pubkey(),
-        owner: &sender.pubkey(),
-        mint: &mint.pubkey(),
-        token_program: &spl_token::id(),
-    };
-    svm.send_transaction(create_sender_ata_ix.instruction(&[&sender])).unwrap();
+    // Create associated token accounts (ATAs) for alice and bob
+    let alice_token_account = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+        .owner(&alice.pubkey())
+        .send()
+        .unwrap();
 
-    // Create recipient's ATA
-    let create_recipient_ata_ix = CreateAssociatedTokenAccount {
-        funder: &recipient.pubkey(),
-        owner: &recipient.pubkey(),
-        mint: &mint.pubkey(),
-        token_program: &spl_token::id(),
-    };
-    svm.send_transaction(create_recipient_ata_ix.instruction(&[&recipient])).unwrap();
+    let bob_token_account = CreateAssociatedTokenAccount::new(&mut svm, &payer, &mint)
+        .owner(&bob.pubkey())
+        .send()
+        .unwrap();
 
-    // Mint tokens to sender
-    let mint_amount = 1000 * 10_u64.pow(decimals as u32);
-    let mint_to_ix = MintTo {
-        mint: &mint.pubkey(),
-        destination: &sender_ata,
-        authority: &authority.pubkey(),
-        amount: mint_amount,
-    };
-    svm.send_transaction(mint_to_ix.instruction(&[&authority])).unwrap();
+    // Mint 1000 tokens to Alice's account
+    MintTo::new(&mut svm, &payer, &mint, &alice_token_account, 1000)
+        .owner(&alice)
+        .send()
+        .unwrap();
 
-    // Transfer tokens from sender to recipient
-    let transfer_amount = 250 * 10_u64.pow(decimals as u32);
-    let transfer_ix = Transfer {
-        source: &sender_ata,
-        destination: &recipient_ata,
-        authority: &sender.pubkey(),
-        amount: transfer_amount,
-    };
-
-    let tx_result = svm.send_transaction(transfer_ix.instruction(&[&sender]));
-    assert!(tx_result.is_ok());
+    // Transfer 400 tokens from Alice to Bob
+    Transfer::new(&mut svm, &payer, &mint, &bob_token_account, 400)
+        .source(&alice_token_account)
+        .owner(&alice)
+        .send()
+        .unwrap();
 
     // Verify balances
-    let sender_balance = svm.get_token_account(&sender_ata).unwrap();
-    let recipient_balance = svm.get_token_account(&recipient_ata).unwrap();
+    let alice_account: TokenAccount = get_spl_account(&svm, &alice_token_account).unwrap();
+    let bob_account: TokenAccount = get_spl_account(&svm, &bob_token_account).unwrap();
 
-    assert_eq!(sender_balance.amount, mint_amount - transfer_amount);
-    assert_eq!(recipient_balance.amount, transfer_amount);
+    let alice_balance = alice_account.amount;
+    let bob_balance = bob_account.amount;
+
+    assert_eq!(alice_balance, 600);
+    assert_eq!(bob_balance, 400);
+
+    println!("SPL token transfer successful!");
 }
 ```
 
@@ -254,65 +260,4 @@ let decimals = 9;
 let one_sol = 10_u64.pow(decimals as u32);
 let amount_sol = 1.5; // Want to send 1.5 SOL
 let amount_lamports = (amount_sol * one_sol as f64) as u64; // 1,500,000,000 lamports
-```
-
-## Batch Operations
-
-When performing multiple token operations, batch them in a single transaction for efficiency:
-
-```rust
-use solana_sdk::instruction::Instruction;
-
-#[test]
-fn test_batch_operations() {
-    let mut svm = LiteSVM::new();
-    // ... setup code ...
-
-    let mut instructions: Vec<Instruction> = vec![];
-
-    // Add multiple mint instructions
-    for recipient_ata in recipient_atas.iter() {
-        let mint_ix = MintTo {
-            mint: &mint.pubkey(),
-            destination: recipient_ata,
-            authority: &authority.pubkey(),
-            amount: 100 * 10_u64.pow(decimals as u32),
-        };
-        instructions.push(mint_ix.instruction_no_signature());
-    }
-
-    // Send all instructions in one transaction
-    let tx_result = svm.send_transaction(instructions);
-    assert!(tx_result.is_ok());
-}
-```
-
-## Error Testing
-
-Test error conditions to ensure your program handles them correctly:
-
-```rust
-#[test]
-fn test_insufficient_balance_error() {
-    let mut svm = LiteSVM::new();
-    // ... setup code ...
-
-    // Try to transfer more than available balance
-    let excessive_amount = sender_balance + 1;
-    let transfer_ix = Transfer {
-        source: &sender_ata,
-        destination: &recipient_ata,
-        authority: &sender.pubkey(),
-        amount: excessive_amount,
-    };
-
-    let tx_result = svm.send_transaction(transfer_ix.instruction(&[&sender]));
-    assert!(tx_result.is_err());
-
-    // Verify the specific error if needed
-    if let Err(e) = tx_result {
-        // Check error message or code
-        assert!(e.to_string().contains("insufficient"));
-    }
-}
 ```

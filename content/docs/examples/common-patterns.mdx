@@ -1,0 +1,221 @@
+---
+title: Common Patterns
+description: Reusable test patterns and helper functions
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+## Test Setup Helper
+
+Create a reusable setup function:
+
+```rust
+fn setup_test() -> (LiteSVM, Keypair) {
+    let mut svm = LiteSVM::new();
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    (svm, payer)
+}
+
+#[test]
+fn test_something() {
+    let (mut svm, payer) = setup_test();
+    // Your test here
+}
+```
+
+## State Verification Pattern
+
+```rust
+#[test]
+fn test_state_change() {
+    let mut svm = LiteSVM::new();
+
+    // Capture initial state
+    let before = svm.get_account(&pubkey);
+
+    // Execute operation
+    svm.send_transaction(tx)?;
+
+    // Verify state changed
+    let after = svm.get_account(&pubkey);
+    assert_ne!(before, after);
+}
+```
+
+## Error Testing Pattern
+
+```rust
+#[test]
+fn test_error_handling() {
+    let mut svm = LiteSVM::new();
+
+    // Set up invalid state
+    let tx = create_invalid_transaction();
+
+    // Verify it fails as expected
+    let result = svm.send_transaction(tx);
+    assert!(result.is_err());
+
+    if let Err(e) = result {
+        assert_eq!(e.err, TransactionError::InsufficientFunds);
+    }
+}
+```
+
+## Reusable Helper Functions
+
+```rust title="tests/helpers.rs"
+use litesvm::LiteSVM;
+use solana_sdk::{
+    signature::Keypair,
+    pubkey::Pubkey,
+};
+
+/// Standard test setup
+pub fn setup_test() -> (LiteSVM, Keypair) {
+    let mut svm = LiteSVM::new();
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    (svm, payer)
+}
+
+/// Deploy a program and return its ID
+pub fn deploy_program(svm: &mut LiteSVM, bytes: &[u8]) -> Pubkey {
+    let program_id = Pubkey::new_unique();
+    svm.add_program(program_id, bytes).unwrap();
+    program_id
+}
+
+/// Create and fund a test account
+pub fn create_funded_account(svm: &mut LiteSVM, lamports: u64) -> Keypair {
+    let account = Keypair::new();
+    svm.airdrop(&account.pubkey(), lamports).unwrap();
+    account
+}
+```
+
+## Using Helpers in Tests
+
+```rust
+#[test]
+fn test_with_helpers() {
+    let (mut svm, payer) = setup_test();
+    let program_id = deploy_program(&mut svm, include_bytes!("../program.so"));
+    let user = create_funded_account(&mut svm, 1_000_000_000);
+
+    // Your test logic here...
+}
+```
+
+## Parameterized Test Pattern
+
+```rust
+#[test]
+fn test_multiple_amounts() {
+    let amounts = vec![1_000, 10_000, 100_000, 1_000_000];
+
+    for amount in amounts {
+        let (mut svm, payer) = setup_test();
+
+        // Test with this amount
+        let result = test_transfer(&mut svm, &payer, amount);
+        assert!(result.is_ok(), "Failed for amount: {}", amount);
+    }
+}
+```
+
+## Table-Driven Tests
+
+```rust
+struct TestCase {
+    name: &'static str,
+    amount: u64,
+    should_succeed: bool,
+}
+
+#[test]
+fn test_transfer_scenarios() {
+    let test_cases = vec![
+        TestCase {
+            name: "valid small transfer",
+            amount: 1_000,
+            should_succeed: true,
+        },
+        TestCase {
+            name: "valid large transfer",
+            amount: 1_000_000_000,
+            should_succeed: true,
+        },
+        TestCase {
+            name: "zero transfer",
+            amount: 0,
+            should_succeed: false,
+        },
+    ];
+
+    for tc in test_cases {
+        let (mut svm, payer) = setup_test();
+        let result = test_transfer(&mut svm, &payer, tc.amount);
+
+        if tc.should_succeed {
+            assert!(result.is_ok(), "Test '{}' should succeed", tc.name);
+        } else {
+            assert!(result.is_err(), "Test '{}' should fail", tc.name);
+        }
+    }
+}
+```
+
+## Cleanup Pattern
+
+```rust
+#[test]
+fn test_with_cleanup() {
+    let mut svm = LiteSVM::new();
+    let account = Pubkey::new_unique();
+
+    // Setup
+    svm.set_account(account, create_test_account()).unwrap();
+
+    // Test
+    let result = test_operation(&mut svm, &account);
+
+    // Cleanup
+    svm.set_account(account, Account::default()).ok();
+
+    // Verify
+    assert!(result.is_ok());
+}
+```
+
+## Snapshot Pattern
+
+```rust
+#[test]
+fn test_with_snapshot() {
+    let mut svm = LiteSVM::new();
+
+    // Create initial state
+    setup_accounts(&mut svm);
+
+    // Take snapshot
+    let accounts_before: Vec<_> = get_all_test_accounts(&svm)
+        .iter()
+        .map(|pk| (pk, svm.get_account(pk)))
+        .collect();
+
+    // Run test
+    execute_test(&mut svm);
+
+    // Verify only expected accounts changed
+    for (pk, before) in accounts_before {
+        let after = svm.get_account(&pk);
+        if should_change(&pk) {
+            assert_ne!(before, after);
+        } else {
+            assert_eq!(before, after);
+        }
+    }
+}
+```

@@ -7,10 +7,6 @@ import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Steps, Step } from "fumadocs-ui/components/steps";
 
-## Overview
-
-The `litesvm-token` crate provides utilities for working with SPL tokens in your LiteSVM tests. LiteSVM includes SPL Token programs by default, making it straightforward to test token-related functionality in your Solana programs.
-
 ## Installation
 
 Make sure you have all the needed dependencies:
@@ -19,75 +15,162 @@ Make sure you have all the needed dependencies:
 cargo add --dev litesvm litesvm-token solana-sdk spl-token spl-associated-token-account
 ```
 
-## Understanding Token Account Creation
+## SPL Token Basics
 
-In Solana, creating token accounts requires two separate instructions due to the separation of concerns between programs. This is a fundamental pattern you'll use throughout token testing.
-
-### Why Two Instructions?
+In Solana, creating a token account is a two step process.
 
 <Steps>
 <Step>
-**System Program creates the account**
-- Allocates space on the blockchain
-- Assigns ownership to Token Program
-- Transfers rent-exempt lamports
+**Create a `Mint Account`**
+- Has no token balance 
+- Holds all the global information of the token, like the total supply, decimals, authority, etc.
+- There is one Mint Account per token
+- The Owner is the Token Program (TokenKeg or Token 2022)
 </Step>
 
 <Step>
-**Token Program initializes the account**
-- Sets the mint (which token type)
-- Sets the owner (who controls the tokens)
-- Initializes amount to 0
+**Create a `Token Account`**
+- Stores the balance for a specific SPL token 
+- Holds the Mint Account to define which SPL token is in this account 
+- There can be several token accounts for one Mint Account 
+- The owner is who has control over the tokens inside this account 
 </Step>
 </Steps>
 
-This separation ensures security and modularity - the System Program handles SOL and account creation, while the Token Program handles all token-specific logic.
+## Types of Token Accounts
 
-### Associated Token Accounts
+### Regular Token Account
 
-Associated Token Accounts (ATAs) simplify this process:
+A token account stores your balance for a specific SPL token:
 
 ```rust
-// Manual token account creation requires:
-// 1. Generate keypair for the account
-// 2. Calculate space needed
-// 3. Create account with System Program
-// 4. Initialize with Token Program
-
-// ATA creation is simpler:
-// - Deterministic address (no keypair needed)
-// - Single instruction handles both steps
-// - Same address every time for owner+mint combination
+// Can create token accounts at ANY address
+let token_account = Keypair::new();  // Random address
+let create_ix = system_instruction::create_account(
+    &payer.pubkey(),
+    &token_account.pubkey(),  // Any address you want
+    rent,
+    165,  // Token account size
+    &spl_token::id(),
+);
+let init_ix = spl_token::instruction::initialize_account(
+    &spl_token::id(),
+    &token_account.pubkey(),
+    &mint,
+    &owner.pubkey(),
+)?;
 ```
 
-<Callout type="tip">
-**Best Practice**: Always use Associated Token Accounts unless you have a specific reason not to. They're deterministic, easier to manage, and prevent common errors.
+<div className="grid grid-cols-1 md:grid-cols-2 gap-2 my-3">
+  <div className="bg-gray-50 dark:bg-gray-950/20 border border-gray-200 dark:border-gray-800 rounded-lg px-2 pt-0.5 pb-2">
+    <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
+      <span className="text-sm">✓</span> Pros
+    </h4>
+    <ul className="space-y-1 text-xs text-gray-900 dark:text-gray-200">
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Can create multiple accounts for same mint/owner</span>
+      </li>
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Flexible - can use any address</span>
+      </li>
+    </ul>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-950/20 border border-gray-200 dark:border-gray-800 rounded-lg px-2 pt-0.5 pb-2">
+    <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
+      <span className="text-sm">✗</span> Cons
+    </h4>
+    <ul className="space-y-1 text-xs text-gray-900 dark:text-gray-200">
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Not deterministic - need to track addresses manually</span>
+      </li>
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Recipient must tell you which account to send to</span>
+      </li>
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Creates confusion with multiple accounts</span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<Callout type="info">
+  **When to use:** Temporary/escrow accounts, program-owned accounts with custom
+  logic, when you need multiple accounts for the same token, advanced DeFi
+  strategies.
 </Callout>
 
-## Basic Setup
+### Associated Token Account (ATA)
 
-Here's how to set up a basic token testing environment:
+An ATA is a token account at a deterministic PDA address:
 
 ```rust
-use litesvm::LiteSVM;
-use litesvm_token::{CreateMint, CreateAssociatedTokenAccount, MintTo};
-use solana_sdk::{
-    signature::{Keypair, Signer},
-    pubkey::Pubkey,
-};
-
-#[test]
-fn test_token_operations() {
-    // Initialize LiteSVM
-    let mut svm = LiteSVM::new();
-
-    // Create and fund payer
-    let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
-    // Ready for token operations!
-}
+// ATA address is ALWAYS the same for owner + mint
+let ata = get_associated_token_address(&owner.pubkey(), &mint);
+// Address derived from: [owner_pubkey, token_program_id, mint]
 ```
+
+How the ATA address is derived:
+
+```rust
+// ATA is a PDA owned by the Associated Token Program
+let (ata, bump) = Pubkey::find_program_address(
+    &[
+        owner.as_ref(),
+        spl_token::id().as_ref(),
+        mint.as_ref(),
+    ],
+    &spl_associated_token_account::id(),  // ATA program
+);
+```
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-2 my-3">
+  <div className="bg-gray-50 dark:bg-gray-950/20 border border-gray-200 dark:border-gray-800 rounded-lg px-2 pt-0.5 pb-2">
+    <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
+      <span className="text-sm">✓</span> Pros
+    </h4>
+    <ul className="space-y-1 text-xs text-gray-900 dark:text-gray-200">
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>One canonical account per owner/mint pair</span>
+      </li>
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Deterministic - anyone can calculate the address</span>
+      </li>
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Simplifies payments - just need wallet address + mint</span>
+      </li>
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Standard convention across all Solana apps</span>
+      </li>
+    </ul>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-950/20 border border-gray-200 dark:border-gray-800 rounded-lg px-2 pt-0.5 pb-2">
+    <h4 className="text-xs font-semibold text-gray-800 dark:text-gray-300 mb-1.5 flex items-center gap-1.5">
+      <span className="text-sm">✗</span> Cons
+    </h4>
+    <ul className="space-y-1 text-xs text-gray-900 dark:text-gray-200">
+      <li className="flex items-start gap-1.5">
+        <span className="text-gray-600 dark:text-gray-400 mt-0.5">•</span>
+        <span>Can only have ONE ATA per owner/mint (by design)</span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<Callout type="tip">
+  **Recommended for most cases:** Wallet applications, DeFi protocols, NFT
+  holdings, payment systems, and any user-facing token transfers.
+</Callout>
 
 ## Quick Example
 
@@ -95,52 +178,47 @@ Here's a complete example of creating a token mint and minting tokens:
 
 ```rust
 use litesvm::LiteSVM;
-use litesvm_token::{CreateMint, CreateAssociatedTokenAccount, MintTo};
-use solana_sdk::signature::{Keypair, Signer};
+use litesvm_token::{
+    get_spl_account,
+    spl_token::{native_mint::DECIMALS, state::Account as TokenAccount},
+    CreateAccount, CreateMint, MintTo, Transfer,
+};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::{Keypair, Signer},
+};
 
 #[test]
 fn test_create_and_mint_tokens() {
     let mut svm = LiteSVM::new();
 
-    // Setup accounts
+    // Create payer account and fund it
     let payer = Keypair::new();
-    let mint = Keypair::new();
-    let mint_authority = Keypair::new();
-    let recipient = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10 * LAMPORTS_PER_SOL).unwrap();
 
-    // Fund the payer
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    // Create a new SPL token mint with the payer as the mint authority
+    let mint = CreateMint::new(&mut svm, &payer)
+        .authority(&payer.pubkey())
+        .decimals(DECIMALS)
+        .send()
+        .unwrap();
 
-    // Create mint with 9 decimals (like SOL)
-    svm.create_mint(
-        &payer,
-        &mint,
-        &mint_authority.pubkey(),
-        None, // No freeze authority
-        9,    // Decimals
-    ).unwrap();
+    // Create a token account for the payer
+    let token_account = CreateAccount::new(&mut svm, &payer, &mint)
+        .owner(&payer.pubkey())
+        .send()
+        .unwrap();
 
-    // Create recipient's token account
-    let recipient_ata = svm.create_associated_token_account(
-        &payer,
-        &recipient.pubkey(),
-        &mint.pubkey(),
-    ).unwrap();
-
-    // Mint 100 tokens
-    let amount = 100 * 10_u64.pow(9); // Account for decimals
-    svm.mint_to(
-        &payer,
-        &mint.pubkey(),
-        &recipient_ata,
-        &mint_authority,
-        amount,
-    ).unwrap();
+    // Mint tokens into the payer's token account
+    MintTo::new(&mut svm, &payer, &mint, &token_account, 1000)
+        .owner(&payer)
+        .send()
+        .unwrap();
 
     // Verify balance
-    let account = svm.get_account(&recipient_ata).unwrap();
-    let token_account = spl_token::state::Account::unpack(&account.data).unwrap();
-    assert_eq!(token_account.amount, amount);
+    let token_account: TokenAccount = get_spl_account(&svm, &token_account).unwrap();
+    let account_balance = token_account.amount;
+    assert_eq!(account_balance, 1000)
 }
 ```
 
@@ -172,91 +250,13 @@ Understanding the relationships between accounts is crucial:
 - **Mint Authority**: Can create new tokens
 - **Freeze Authority**: Can freeze token accounts (optional)
 
-## Common Patterns
-
-### Testing Helper Pattern
-
-Create a test context to reduce boilerplate:
-
-```rust
-struct TestContext {
-    svm: LiteSVM,
-    payer: Keypair,
-    mint: Pubkey,
-    mint_authority: Keypair,
-}
-
-impl TestContext {
-    fn new() -> Self {
-        let mut svm = LiteSVM::new();
-        let payer = Keypair::new();
-        let mint_keypair = Keypair::new();
-        let mint_authority = Keypair::new();
-
-        // Setup
-        svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-        svm.create_mint(
-            &payer,
-            &mint_keypair,
-            &mint_authority.pubkey(),
-            None,
-            9,
-        ).unwrap();
-
-        Self {
-            svm,
-            payer,
-            mint: mint_keypair.pubkey(),
-            mint_authority,
-        }
-    }
-
-    fn create_user_with_tokens(&mut self, amount: u64) -> (Keypair, Pubkey) {
-        let user = Keypair::new();
-        let user_ata = self.svm.create_associated_token_account(
-            &self.payer,
-            &user.pubkey(),
-            &self.mint,
-        ).unwrap();
-
-        if amount > 0 {
-            self.svm.mint_to(
-                &self.payer,
-                &self.mint,
-                &user_ata,
-                &self.mint_authority,
-                amount,
-            ).unwrap();
-        }
-
-        (user, user_ata)
-    }
-}
-```
-
-## Best Practices
-
-<Callout type="tip">
-1. **Always use ATAs when possible** - They're deterministic and easier to work with
-2. **Account for decimals** - Create helper functions for token amounts
-3. **Test edge cases** - Zero amounts, maximum amounts, insufficient balances
-4. **Verify state changes** - Always check balances after operations
-5. **Use helper functions** - Reduce test boilerplate with reusable patterns
-</Callout>
-
 ## Troubleshooting
 
 ### Common Errors
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `AccountNotFound` | Trying to use an account that doesn't exist | Ensure account is created before use |
+| Error                       | Cause                                               | Solution                                |
+| --------------------------- | --------------------------------------------------- | --------------------------------------- |
+| `AccountNotFound`           | Trying to use an account that doesn't exist         | Ensure account is created before use    |
 | `AccountAlreadyInitialized` | Trying to initialize an already initialized account | Check if account exists before creating |
-| `InsufficientFunds` | Not enough lamports for rent or tokens for transfer | Ensure sufficient funding/minting |
-| `OwnerMismatch` | Account owned by wrong program | Verify correct program ID when creating |
-
-## Next Steps
-
-- **[Token Operations →](/docs/testing-with-spl-tokens/token-operations)** - Learn about minting, transfers, and other operations
-- **[Basic Examples →](/docs/examples)** - See complete token testing examples
-- **[Advanced Concepts →](/docs/advanced)** - Advanced token testing techniques
+| `InsufficientFunds`         | Not enough lamports for rent or tokens for transfer | Ensure sufficient funding/minting       |
+| `OwnerMismatch`             | Account owned by wrong program                      | Verify correct program ID when creating |
