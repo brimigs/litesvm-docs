@@ -6,6 +6,66 @@ description: Complete test examples for common Solana testing scenarios
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
+## Common Patterns
+
+### Test Setup Helper
+
+Create a reusable setup function:
+
+```rust
+fn setup_test() -> (LiteSVM, Keypair) {
+    let mut svm = LiteSVM::new();
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+    (svm, payer)
+}
+
+#[test]
+fn test_something() {
+    let (mut svm, payer) = setup_test();
+    // Your test here
+}
+```
+
+### State Verification Pattern
+
+```rust
+#[test]
+fn test_state_change() {
+    let mut svm = LiteSVM::new();
+
+    // Capture initial state
+    let before = svm.get_account(&pubkey);
+
+    // Execute operation
+    svm.send_transaction(tx)?;
+
+    // Verify state changed
+    let after = svm.get_account(&pubkey);
+    assert_ne!(before, after);
+}
+```
+
+### Error Testing Pattern
+
+```rust
+#[test]
+fn test_error_handling() {
+    let mut svm = LiteSVM::new();
+
+    // Set up invalid state
+    let tx = create_invalid_transaction();
+
+    // Verify it fails as expected
+    let result = svm.send_transaction(tx);
+    assert!(result.is_err());
+
+    if let Err(e) = result {
+        assert_eq!(e.err, TransactionError::InsufficientFunds);
+    }
+}
+```
+
 ## Testing a Token Transfer
 
 Complete test for transferring SOL between accounts:

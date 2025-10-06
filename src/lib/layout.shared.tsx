@@ -11,6 +11,7 @@ export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: 'LiteSVM Docs',
+      url: '/docs/getting-started',
     },
     githubUrl: 'https://github.com/LiteSVM/litesvm',
     links: [],

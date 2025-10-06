@@ -9,15 +9,16 @@ import { Steps, Step } from "fumadocs-ui/components/steps";
 
 ## Setup
 
-Before testing your program, ensure you have:
+Before testing your program, ensure you:
 
-1. Built your program to generate the `.so` file
-2. Installed LiteSVM and the required dependencies
-3. Created a test file in your `tests` directory
+1. Build your program to generate the `.so` file
+2. Add `litesvm` as a dev dependencies to the `Cargo.toml` file
+3. Add any additional dev dependencies that may be needed, like `solana-sdk` and `litesvm-token`
+4. Create a test file in your `tests` directory - `src` and `tests` should be at the same level in your directory structure.
 
 ## Basic Program Test Layout
 
-Here are all the basic steps needed to call and execute an instruction in a program.
+Here are all the basic steps needed to call and execute an instruction in a Solana program.
 
 ```rust title="tests/program_test.rs"
 use litesvm::LiteSVM;
@@ -37,7 +38,7 @@ fn test_my_program() {
 
     // Deploy your program to the test environment
     let program_id = Pubkey::from(my_program::ID);
-    let program_bytes = include_bytes!("../target/deploy/my_program.so");
+    let program_bytes = include_bytes!("../../../target/deploy/my_program.so");
     svm.add_program(program_id, program_bytes);
 
     // Create and fund test accounts
@@ -53,7 +54,7 @@ fn test_my_program() {
         data: vec![],
     };
 
-    // Build and send transaction
+    // Build transaction
     let tx = Transaction::new_signed_with_payer(
         &[instruction],
         Some(&payer.pubkey()),
@@ -61,7 +62,7 @@ fn test_my_program() {
         svm.latest_blockhash(),
     );
 
-    // Execute
+    // Send transaction
     let result = svm.send_transaction(tx).unwrap();
 
     // Check transaction succeeded
@@ -71,122 +72,15 @@ fn test_my_program() {
 }
 ```
 
+The default test environment that is generated with `LiteSVM::new()` includes
+all runtime features enabled, default sysvars, precompiles, spl programs,
+sigverify, and all built in programs, like the system program.
+
 <Callout type="info">
-  Note: The basic test environment includes all runtime features enabled,
-  default sysvars, precompiles, spl programs, sigverify, and all built in
-  programs, like the system program. Any other program that you want to interact
-  with must be deployed to the test environment.
+  If you want to interact with any program that is not included in the default
+  test environment, you must deploy that program to the test environment.
 </Callout>
-
-This example only covers the basics of deploying programs to the LiteSVM test environment, for more information jump to the [Deploying Programs](/docs/testing-your-program/deploy) section.
-
-## Common Test Patterns
-
-### Helper Function for Setup
-
-Create a reusable setup function:
-
-```rust
-fn setup_test_environment() -> (LiteSVM, Keypair, Pubkey) {
-    let mut svm = LiteSVM::new();
-
-    // Deploy program
-    let program_id = Pubkey::from(my_program::ID);
-    let program_bytes = include_bytes!("../target/deploy/my_program.so");
-    svm.add_program(program_id, program_bytes);
-
-    // Create funded payer
-    let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
-    (svm, payer, program_id)
-}
-```
-
-### Testing Several Instructions
-
-When your program has multiple instructions, organize your tests accordingly:
-
-```rust
-#[test]
-fn test_initialize() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-    // Test initialization logic
-}
-
-#[test]
-fn test_update() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-    // Initialize first
-    // Then test update logic
-}
-
-#[test]
-fn test_close() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-    // Setup initial state
-    // Test close logic
-}
-```
-
-### Testing State Changes
-
-Verify account data changes:
-
-```rust
-#[test]
-fn test_state_update() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-
-    // Get initial state
-    let account = Keypair::new();
-    svm.airdrop(&account.pubkey(), 1_000_000_000).unwrap();
-    let initial_balance = svm.get_balance(&account.pubkey()).unwrap();
-
-    // Execute transaction
-    svm.send_transaction(tx).unwrap();
-
-    // Verify state changed
-    let final_balance = svm.get_balance(&account.pubkey()).unwrap();
-    assert_ne!(initial_balance, final_balance);
-
-    // Check account data
-    let account_data = svm.get_account(&account.pubkey()).unwrap();
-    // Verify your custom data structure
-}
-```
-
-### Testing with PDAs
-
-When your program uses Program Derived Addresses:
-
-```rust
-#[test]
-fn test_pda_creation() {
-    let (mut svm, payer, program_id) = setup_test_environment();
-
-    // Derive PDA
-    let (pda, bump) = Pubkey::find_program_address(
-        &[b"seed", payer.pubkey().as_ref()],
-        &program_id
-    );
-
-    // Verify PDA was created
-    let pda_account = svm.get_account(&pda).unwrap();
-
-    // Verify PDA account properties
-    let pda_account = svm.get_account(&pda).unwrap();
-    assert_eq!(pda_account.owner, program_id, "PDA owner should be the program");
-}
-```
-
-### Testing With SPL Tokens
-
-If your program using tokens, rather than manually creating and handling SPL tokens, Associated Token Accounts, Mint Accounts, etc, use the `litesvm-token` crate.
-
-Full detailed information for this crate can be found in the **[Testing with SPL Tokens](/docs/testing-with-spl-tokens)** section.
 
 ## Next Steps
 
-- **[Testing Recipes →](/docs/examples)** - Copy-paste solutions for common scenarios
-- **[Complete Examples on Github →](/docs/complete-examples)** - Jump straight into full application examples
+In the next section, we'll learn all about deploying programs to the litesvm test environment.

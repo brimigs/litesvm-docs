@@ -1,6 +1,6 @@
 ---
 title: Executing Instructions
-description: Learn how call an instruction from your program in your test
+description: Learn how call an instruction from A Solana program in your test
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -9,7 +9,9 @@ import { Steps, Step } from "fumadocs-ui/components/steps";
 
 ## Overview
 
-After deploying a program to LiteSVM, you need to execute instructions to interact with it. LiteSVM provides a simple API for creating, sending, and simulating transactions that is fully compatible with Solana's transaction model.
+After deploying a program to LiteSVM, you'll need to execute instructions to interact with the deployed program.
+
+LiteSVM provides a simple API for creating, sending, and simulating transactions that is fully compatible with Solana's transaction model.
 
 ## Basic Transaction Flow
 
@@ -32,7 +34,7 @@ let instruction = Instruction {
     program_id: Pubkey::new_unique(),  // The program to call
     accounts: vec![                     // Accounts the program needs
         AccountMeta::new(account_pubkey, false),        // Writable, not signer
-        AccountMeta::new_readonly(readonly_pubkey, false), // Read-only
+        AccountMeta::new_readonly(readonly_pubkey, false), // Read-only, not signer
         AccountMeta::new(signer_pubkey, true),          // Writable, signer
     ],
     data: vec![0, 1, 2, 3],             // Instruction data (program-specific)

@@ -9,12 +9,12 @@ import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 # Quick Start Guide
 
-This guide covers the basics, how to create an account, fund it, and send a transaction.
+This guide covers the basics: how to create an account, fund an account, and send a transaction.
 
 <Steps>
 
 <Step>
-### Install LiteSVM
+### Install LiteSVM and Additional Dependencies
 
 Add LiteSVM to your dev dependencies:
 
@@ -22,32 +22,40 @@ Add LiteSVM to your dev dependencies:
 cargo add --dev litesvm
 ```
 
-</Step>
-
-<Step>
-### Install Additional Dependencies
-
-Several Solana crates enhance the testing experience by providing essential types and utilities:
+Several Solana crates enhance the testing experience by providing essential types and utilities, in this case, we will need `solana-sdk`.
 
 ```bash
-cargo add solana-precompiles solana-account solana-pubkey solana-feature-set solana-program solana-sdk --dev
+cargo add --dev solana-sdk
 ```
 
 </Step>
 
 <Step>
-### Write Your First test
+### Create Test Directory
 
-This test will create and fund a new account in the LiteSVM test environment.
+Inside your program directory, create a folder for `tests`.
 
-Create a new test file and copy this code:
+```bash
+mkdir tests
+```
 
-```rust title="tests/my_first_test.rs"
+Now `src` and `tests` should be at the same level in your directory structure.
+
+</Step>
+
+<Step>
+### Create and Fund an Account
+
+Lets write your first LiteSVM test.
+
+Inside your `tests` folder, create a new file and copy this code:
+
+```rust title="tests/create_account.rs"
 use litesvm::LiteSVM;
 use solana_sdk::signature::{Keypair, Signer};
 
 #[test]
-fn my_first_litesvm_test() {
+fn create_account() {
     // Create the test environment
     let mut svm = LiteSVM::new();
 
@@ -68,20 +76,27 @@ fn my_first_litesvm_test() {
 </Step>
 
 <Step>
-### Run the Test
+### Run Your Test
 
 ```bash
-cargo test my_first_litesvm_test
+cargo test create_account -- --show-output
 ```
 
 You should see:
 
 ```
+
 running 1 test
-test my_first_litesvm_test ... ok
+test create_account ... ok
+
+successes:
+
+---- create_account stdout ----
 Account funded with 1 SOL
 
-test result: ok. 1 passed; 0 failed
+
+successes:
+    create_account
 ```
 
 <Callout type="success">
@@ -92,9 +107,11 @@ test result: ok. 1 passed; 0 failed
 </Step>
 
 <Step>
-### Write Your Second Test
+### Execute a Transaction
 
-This test will execute a transaction in the LiteSVM test environment.
+Now lets create your second LiteSVM test.
+
+Create a new test file and copy this code:
 
 ```rust title="tests/transfer_test.rs"
 use litesvm::LiteSVM;
@@ -147,11 +164,59 @@ fn test_transfer() {
 </Callout>
 
 </Step>
+
+<Step>
+### Run All Tests Together
+
+```bash
+cargo test -- --show-output
+```
+
+You should see:
+
+```
+running 1 test
+test create_account ... ok
+
+successes:
+
+---- create_account stdout ----
+Account funded with 1 SOL
+
+
+successes:
+    create_account
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/test_transfer.rs (target/debug/deps/test_transfer-f174954e7483f36b)
+
+running 1 test
+test test_transfer ... ok
+
+successes:
+
+---- test_transfer stdout ----
+Transfer successful!
+
+
+successes:
+    test_transfer
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+```
+
+<Callout type="success">
+  **That's it!** Now you've successfully make litesvm tests that create and fund accounts and executes transactions. 
+</Callout>
+</Step>
+
 </Steps>
 
 ## Next Steps
 
-- **[Why LiteSVM →](/docs/core-concepts)** - Understand the mental model
-- **[Testing Your Program →](/docs/testing-your-program)** - Learn how to test your own Solana program
-- **[Testing Recipes →](/docs/examples)** - Copy-paste solutions for common scenarios
-- **[Complete Examples on Github →](/docs/complete-examples)** - Jump straight into full application examples
+- **[Why LiteSVM →](/docs/core-concepts)** Learn why you would want to use LiteSVM for testing
+- **[Testing Your Program →](/docs/testing-your-program)** Learn how to test your own Solana program
+- **[Examples →](/docs/examples)** View copy-paste solutions for common scenarios and full repository examples
+- **[References →](/docs/complete-examples)** Learn advanced features and custom configurations
