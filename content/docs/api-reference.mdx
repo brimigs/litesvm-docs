@@ -1,86 +1,464 @@
 ---
 title: API Reference
-description: API reference for LiteSVM methods and configuration options
+description: Complete API reference for LiteSVM methods and configuration options
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
-## Custom Configuration
+## Quick Reference
 
-Start with `LiteSVM::default()` and configure exactly what you need:
+| Method                                         | Description                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `LiteSVM::new()`                               | Create new LiteSVM basic test environment                                                  |
+| `LiteSVM::default()`                           | Returns the "default value" for a type                                                     |
+| `airdrop(&Pubkey, lamports)`                   | Funds the account with the lamports specified                                              |
+| `get_account(&Pubkey)`                         | Returns all information associated with the account of the provided pubkey                 |
+| `set_account(Pubkey, Account)`                 | Sets all information associated with the account of the provided pubkey                    |
+| `get_balance(&Pubkey)`                         | Gets the lamport balance of the provided account pubkey                                    |
+| `minimum_balance_for_rent_exemption(data_len)` | Returns minimum balance required to make an account with specified data length rent exempt |
+| `add_program(program_id, &bytes)`              | Adds am SBF program to the test environment                                                |
+| `add_program_from_file(program_id, path)`      | Adds an SBF program to the test environment from the file specified                        |
+| `send_transaction(tx)`                         | Submits a signed transaction                                                               |
+| `simulate_transaction(tx)`                     | Simulates a transaction without modifying state                                            |
+| `get_transaction(&signature)`                  | Gets a transaction from history                                                            |
+| `latest_blockhash()`                           | Gets current blockhash                                                                     |
+| `expire_blockhash()`                           | Force blockhash expiration on the current blockhash                                        |
+| `warp_to_slot(slot)`                           | Warps the clock to the specified slot                                                      |
+| `get_sysvar<T>()`                              | Gets a sysvar from the test environment                                                    |
+| `set_sysvar<T>(&value)`                        | Sets the sysvar to the test environment                                                    |
+
+## Environment Configuration Options
+
+All configuration methods use the builder pattern with `LiteSVM::default()`.
+
+### with_compute_budget
 
 ```rust
-use litesvm::LiteSVM;
+pub fn with_compute_budget(self, compute_budget: ComputeBudget) -> Self
+```
+
+Set compute unit limits and heap size.
+
+```rust
 use solana_sdk::compute_budget::ComputeBudget;
 
 let mut svm = LiteSVM::default()
     .with_compute_budget(ComputeBudget {
         compute_unit_limit: 1_400_000,
         heap_size: 256 * 1024,
-        stack_frame_size: 4096,
-        log_pubkey_units: 100,
         ..ComputeBudget::default()
-    })
-    .with_sigverify(false)
-    .with_blockhash_check(false)
-    .with_transaction_history(100)
-    .with_lamports(10_000_000_000_000);
+    });
 ```
 
-### Configuration Options
+### with_sigverify
 
-| Option                       | Purpose                       | Default       |
-| ---------------------------- | ----------------------------- | ------------- |
-| `with_compute_budget()`      | Set compute limits            | 200,000 units |
-| `with_sigverify()`           | Enable signature verification | true          |
-| `with_blockhash_check()`     | Enable blockhash validation   | true          |
-| `with_transaction_history()` | Keep transaction history      | 0             |
-| `with_lamports()`            | Initial lamports for fees     | 1,000,000,000 |
+```rust
+pub fn with_sigverify(self, sigverify: bool) -> Self
+```
+
+Enable or disable signature verification. Default: `true`.
+
+```rust
+// Disable for faster tests
+let mut svm = LiteSVM::default()
+    .with_sigverify(false);
+```
+
+### with_blockhash_check
+
+```rust
+pub fn with_blockhash_check(self, check: bool) -> Self
+```
+
+Enable or disable blockhash validation. Default: `true`.
+
+```rust
+// Disable to use any blockhash
+let mut svm = LiteSVM::default()
+    .with_blockhash_check(false);
+```
+
+### with_transaction_history
+
+```rust
+pub fn with_transaction_history(self, capacity: usize) -> Self
+```
+
+Set number of transactions to keep in history. Default: `0`.
+
+```rust
+// Keep last 100 transactions
+let mut svm = LiteSVM::default()
+    .with_transaction_history(100);
+```
+
+### with_lamports
+
+```rust
+pub fn with_lamports(self, lamports: u64) -> Self
+```
+
+Set initial lamports for fee collection. Default: `1_000_000_000`.
+
+```rust
+let mut svm = LiteSVM::default()
+    .with_lamports(10_000_000_000);
+```
+
+### with_default_programs
+
+```rust
+pub fn with_default_programs(self) -> Self
+```
+
+Include default SPL programs (Token, Associated Token, etc.).
+
+```rust
+let mut svm = LiteSVM::default()
+    .with_default_programs();
+```
+
+### with_sysvars
+
+```rust
+pub fn with_sysvars(self, sysvars: Vec<(Pubkey, Vec<u8>)>) -> Self
+```
+
+Set custom sysvar values at initialization.
+
+```rust
+use solana_sdk::sysvar;
+
+let mut svm = LiteSVM::default()
+    .with_sysvars(vec![
+        // Custom sysvars
+    ]);
+```
+
+### with_feature_set
+
+```rust
+pub fn with_feature_set(self, feature_set: Arc<FeatureSet>) -> Self
+```
+
+Configure Solana feature set for testing specific runtime features.
+
+```rust
+use solana_sdk::feature_set::FeatureSet;
+use std::sync::Arc;
+
+let mut svm = LiteSVM::default()
+    .with_feature_set(Arc::new(FeatureSet::all_enabled()));
+```
+
+<Callout type="info">
+  Use `LiteSVM::new()` for quick tests. Use `LiteSVM::default()` with builder
+  methods when you need specific configuration.
+</Callout>
+
+## Core Methods
+
+### Account Management
+
+#### airdrop
+
+```rust
+pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) -> Result<()>
+```
+
+Fund an account with lamports.
+
+```rust
+let keypair = Keypair::new();
+svm.airdrop(&keypair.pubkey(), 10_000_000_000).unwrap();
+```
+
+#### get_account
+
+```rust
+pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account>
+```
+
+Retrieve account data.
+
+```rust
+let account = svm.get_account(&pubkey)?;
+println!("Lamports: {}", account.lamports);
+println!("Owner: {}", account.owner);
+println!("Data length: {}", account.data.len());
+```
+
+#### set_account
+
+```rust
+pub fn set_account(&mut self, pubkey: Pubkey, account: Account) -> Result<()>
+```
+
+Directly set account state.
+
+```rust
+use solana_sdk::account::Account;
+
+svm.set_account(pubkey, Account {
+    lamports: 1_000_000,
+    data: vec![0; 100],
+    owner: program_id,
+    executable: false,
+    rent_epoch: 0,
+}).unwrap();
+```
+
+#### get_balance
+
+```rust
+pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>
+```
+
+Get account lamport balance.
+
+```rust
+let balance = svm.get_balance(&pubkey).unwrap();
+println!("Balance: {} lamports", balance);
+```
+
+#### minimum_balance_for_rent_exemption
+
+```rust
+pub fn minimum_balance_for_rent_exemption(&self, data_len: usize) -> u64
+```
+
+Calculate minimum lamports needed for rent exemption.
+
+```rust
+let data_len = 100;
+let min_balance = svm.minimum_balance_for_rent_exemption(data_len);
+
+svm.set_account(pubkey, Account {
+    lamports: min_balance,
+    data: vec![0; data_len],
+    // ...
+}).unwrap();
+```
+
+### Program Management
+
+#### add_program
+
+```rust
+pub fn add_program(&mut self, program_id: Pubkey, program_bytes: &[u8]) -> Result<()>
+```
+
+Deploy program from byte array. Embeds program at compile time.
+
+```rust
+let program_bytes = include_bytes!("../target/deploy/program.so");
+svm.add_program(program_id, program_bytes).unwrap();
+```
+
+#### add_program_from_file
+
+```rust
+pub fn add_program_from_file(&mut self, program_id: Pubkey, path: &str) -> Result<()>
+```
+
+Deploy program from filesystem. Loads program at runtime.
+
+```rust
+svm.add_program_from_file(
+    program_id,
+    "target/deploy/program.so"
+).unwrap();
+```
+
+<Callout type="info">
+  Use `add_program()` with `include_bytes!()` for faster tests. Use
+  `add_program_from_file()` when programs change frequently during development.
+</Callout>
+
+### Transaction Execution
+
+#### send_transaction
+
+```rust
+pub fn send_transaction(&mut self, tx: impl Into<VersionedTransaction>) -> Result<TransactionMetadata, FailedTransactionMetadata>
+```
+
+Execute transaction and modify state.
+
+```rust
+let tx = Transaction::new_signed_with_payer(
+    &[instruction],
+    Some(&payer.pubkey()),
+    &[&payer],
+    svm.latest_blockhash(),
+);
+
+match svm.send_transaction(tx) {
+    Ok(meta) => {
+        println!("Success! Signature: {}", meta.signature);
+        println!("Compute units: {}", meta.compute_units_consumed);
+    }
+    Err(e) => {
+        println!("Failed: {:?}", e.err);
+        println!("Logs: {:?}", e.meta.logs);
+    }
+}
+```
+
+#### simulate_transaction
+
+```rust
+pub fn simulate_transaction(&self, tx: impl Into<VersionedTransaction>) -> Result<TransactionMetadata, FailedTransactionMetadata>
+```
+
+Simulate transaction without modifying state.
+
+```rust
+// State before simulation
+let balance_before = svm.get_balance(&pubkey).unwrap();
+
+// Simulate transaction
+let result = svm.simulate_transaction(tx.clone());
+
+// State unchanged
+assert_eq!(svm.get_balance(&pubkey).unwrap(), balance_before);
+
+// Check if transaction would succeed
+if result.is_ok() {
+    // Safe to send
+    svm.send_transaction(tx).unwrap();
+}
+```
+
+#### get_transaction
+
+```rust
+pub fn get_transaction(&self, signature: &Signature) -> Option<Result<TransactionMetadata, FailedTransactionMetadata>>
+```
+
+Query transaction from history. Requires `with_transaction_history()` to be set.
+
+```rust
+let mut svm = LiteSVM::new()
+    .with_transaction_history(100);
+
+let result = svm.send_transaction(tx).unwrap();
+let signature = result.signature;
+
+// Query later
+if let Some(tx_result) = svm.get_transaction(&signature) {
+    match tx_result {
+        Ok(meta) => println!("Found: {:?}", meta),
+        Err(e) => println!("Failed: {:?}", e.err),
+    }
+}
+```
+
+#### latest_blockhash
+
+```rust
+pub fn latest_blockhash(&self) -> Hash
+```
+
+Get current blockhash for transactions.
+
+```rust
+let blockhash = svm.latest_blockhash();
+
+let tx = Transaction::new_signed_with_payer(
+    &[instruction],
+    Some(&payer.pubkey()),
+    &[&payer],
+    blockhash,
+);
+```
+
+#### expire_blockhash
+
+```rust
+pub fn expire_blockhash(&mut self)
+```
+
+Force current blockhash to expire.
+
+```rust
+let old_hash = svm.latest_blockhash();
+svm.expire_blockhash();
+let new_hash = svm.latest_blockhash();
+
+assert_ne!(old_hash, new_hash);
+
+// Transactions with old_hash will now fail
+```
 
 ## Time Manipulation
 
-### Warp to Specific Slot
+### warp_to_slot
 
 ```rust
-// Jump to any slot
-svm.warp_to_slot(1000);
-
-// Advance by slots
-let current = svm.get_sysvar::<Clock>().slot;
-svm.warp_to_slot(current + 100);
+pub fn warp_to_slot(&mut self, slot: u64)
 ```
 
-### Manipulate Clock Sysvar
+Jump to a specific slot. Only forward time travel is supported.
+
+```rust
+// Get current slot
+let clock: Clock = svm.get_sysvar();
+let current_slot = clock.slot;
+
+// Jump forward 100 slots
+svm.warp_to_slot(current_slot + 100);
+
+// Verify
+let new_clock: Clock = svm.get_sysvar();
+assert_eq!(new_clock.slot, current_slot + 100);
+```
+
+### Manual Clock Manipulation
 
 ```rust
 use solana_sdk::clock::Clock;
 
+// Read clock
 let mut clock: Clock = svm.get_sysvar();
+
+// Modify fields
 clock.slot = 1000;
 clock.epoch = 10;
-clock.unix_timestamp = 1735689600; // Jan 1, 2025
-clock.epoch_start_timestamp = 1735603200;
-clock.leader_schedule_epoch = 10;
+clock.unix_timestamp = 1735689600;
 
+// Write back
 svm.set_sysvar(&clock);
 ```
 
-### Expire Blockhashes
+## Sysvars
+
+### get_sysvar
 
 ```rust
-// Force blockhash expiration
-let old_blockhash = svm.latest_blockhash();
-svm.expire_blockhash();
-let new_blockhash = svm.latest_blockhash();
-
-// Old transactions will now fail
-assert_ne!(old_blockhash, new_blockhash);
+pub fn get_sysvar<T: Sysvar>(&self) -> T
 ```
 
-## Custom Sysvars
+Read sysvar value.
 
-### Rent Configuration
+```rust
+use solana_sdk::clock::Clock;
+use solana_sdk::rent::Rent;
+use solana_sdk::epoch_schedule::EpochSchedule;
+
+let clock: Clock = svm.get_sysvar();
+let rent: Rent = svm.get_sysvar();
+let epoch_schedule: EpochSchedule = svm.get_sysvar();
+```
+
+### set_sysvar
+
+```rust
+pub fn set_sysvar<T: Sysvar>(&mut self, sysvar: &T)
+```
+
+Write sysvar value.
 
 ```rust
 use solana_sdk::rent::Rent;
@@ -94,23 +472,38 @@ let rent = Rent {
 svm.set_sysvar(&rent);
 ```
 
-### Epoch Schedule
+### Common Sysvars
+
+#### Clock
+
+```rust
+use solana_sdk::clock::Clock;
+
+let clock: Clock = svm.get_sysvar();
+println!("Slot: {}", clock.slot);
+println!("Timestamp: {}", clock.unix_timestamp);
+println!("Epoch: {}", clock.epoch);
+```
+
+#### Rent
+
+```rust
+use solana_sdk::rent::Rent;
+
+let rent: Rent = svm.get_sysvar();
+let min_balance = rent.minimum_balance(data_len);
+```
+
+#### Epoch Schedule
 
 ```rust
 use solana_sdk::epoch_schedule::EpochSchedule;
 
-let epoch_schedule = EpochSchedule {
-    slots_per_epoch: 432_000,
-    leader_schedule_slot_offset: 432_000,
-    warmup: false,
-    first_normal_epoch: 0,
-    first_normal_slot: 0,
-};
-
-svm.set_sysvar(&epoch_schedule);
+let schedule: EpochSchedule = svm.get_sysvar();
+println!("Slots per epoch: {}", schedule.slots_per_epoch);
 ```
 
-### Stake History
+#### Stake History
 
 ```rust
 use solana_sdk::stake_history::{StakeHistory, StakeHistoryEntry};
@@ -128,232 +521,125 @@ stake_history.add(
 svm.set_sysvar(&stake_history);
 ```
 
-## Direct State Manipulation
+## Transaction Simulation
 
-### Create Any Account State
+### When to Use Simulation
 
-```rust
-use solana_sdk::account::Account;
+Use `simulate_transaction()` to:
 
-// Create account with specific state
-svm.set_account(pubkey, Account {
-    lamports: 1_000_000_000,
-    data: vec![1, 2, 3, 4, 5],
-    owner: program_id,
-    executable: false,
-    rent_epoch: 0,
-})?;
-```
-
-### Pre-populate Token Accounts
+- Test transaction validity without modifying state
+- Check compute unit consumption
+- Verify transaction logs without commitment
+- Test error handling paths
 
 ```rust
-use spl_token::state::{Account as TokenAccount, AccountState};
-use solana_program::program_pack::Pack;
+// Test if transaction would succeed
+let result = svm.simulate_transaction(tx.clone());
 
-let token_account = TokenAccount {
-    mint,
-    owner,
-    amount: 1_000_000_000_000,
-    delegate: COption::None,
-    state: AccountState::Initialized,
-    is_native: COption::None,
-    delegated_amount: 0,
-    close_authority: COption::None,
-};
+match result {
+    Ok(meta) => {
+        println!("Would succeed");
+        println!("Compute units: {}", meta.compute_units_consumed);
 
-let mut data = vec![0u8; TokenAccount::LEN];
-TokenAccount::pack(token_account, &mut data)?;
-
-svm.set_account(token_pubkey, Account {
-    lamports: 2_039_280,
-    data,
-    owner: spl_token::id(),
-    executable: false,
-    rent_epoch: 0,
-})?;
-```
-
-## Transaction History
-
-### Enable History Tracking
-
-```rust
-// Keep last 100 transactions
-let mut svm = LiteSVM::new()
-    .with_transaction_history(100);
-```
-
-### Query Past Transactions
-
-```rust
-use solana_sdk::signature::Signature;
-
-// Look up by signature
-let signature = Signature::new_unique();
-if let Some(result) = svm.get_transaction(&signature) {
-    match result {
-        Ok(meta) => {
-            println!("Transaction found!");
-            println!("Compute units: {}", meta.compute_units_consumed);
-            println!("Logs: {:?}", meta.logs);
-        }
-        Err(e) => {
-            println!("Transaction failed: {:?}", e.err);
-        }
-    }
-}
-```
-
-## Simulation vs Execution
-
-### Simulate Without State Changes
-
-```rust
-// Simulate - state remains unchanged
-let sim_result = svm.simulate_transaction(tx.clone());
-
-match sim_result {
-    Ok(info) => {
-        println!("Simulation successful");
-        // Access simulation info fields
-        // State is NOT modified
+        // Now execute for real
+        svm.send_transaction(tx).unwrap();
     }
     Err(e) => {
-        println!("Would fail with: {:?}", e.err);
-        println!("Failure logs: {:?}", e.meta.logs);
+        println!("Would fail: {:?}", e.err);
+        // Don't send transaction
     }
 }
-
-// Execute - state is modified
-let exec_result = svm.send_transaction(tx);
-// State IS modified
 ```
 
-## Testing Without Security
-
-Disable security features for specific test scenarios:
-
-<Tabs items={['No Signature Verification', 'No Blockhash Check', 'Allow Duplicates']}>
-<Tab value="No Signature Verification">
-```rust
-// Skip signature verification
-let mut svm = LiteSVM::default()
-    .with_sigverify(false);
-
-// Transactions with invalid signatures will still execute
-
-````
-</Tab>
-
-<Tab value="No Blockhash Check">
-```rust
-// Skip blockhash validation
-let mut svm = LiteSVM::default()
-    .with_blockhash_check(false);
-
-// Can use any blockhash, even expired ones
-````
-
-</Tab>
-
-<Tab value="Allow Duplicates">
-```rust
-// Allow duplicate transactions
-let mut svm = LiteSVM::default()
-    .with_transaction_history(0);
-
-// Same transaction can be sent multiple times
-
-````
-</Tab>
-</Tabs>
-
-## Performance Optimization
-
-### Reuse SVM Instances
+### Testing Error Cases
 
 ```rust
-// ❌ Slow - creates new VM for each test
-#[test]
-fn test_1() {
-    let mut svm = LiteSVM::new();
-    // test...
+// Simulate expected failure
+let result = svm.simulate_transaction(invalid_tx);
+assert!(result.is_err());
+
+match result.unwrap_err().err {
+    TransactionError::InsufficientFundsForFee => {
+        println!("Expected error occurred");
+    }
+    _ => panic!("Unexpected error"),
 }
-
-#[test]
-fn test_2() {
-    let mut svm = LiteSVM::new();
-    // test...
-}
-
-// ✅ Fast - reuse VM across tests
-fn setup() -> LiteSVM {
-    LiteSVM::new()
-}
-
-#[test]
-fn test_1() {
-    let mut svm = setup();
-    // test...
-}
-
-#[test]
-fn test_2() {
-    let mut svm = setup();
-    // test...
-}
-````
-
-### Use Include Bytes
-
-```rust
-// ❌ Slow - runtime file I/O
-let bytes = std::fs::read("program.so")?;
-
-// ✅ Fast - compile-time inclusion
-let bytes = include_bytes!("../target/deploy/program.so");
 ```
 
-### Batch State Setup
+### State Remains Unchanged
 
 ```rust
-// ❌ Slow - individual operations
-for i in 0..100 {
-    let account = Keypair::new();
-    svm.airdrop(&account.pubkey(), 1_000_000_000)?;
+let balance_before = svm.get_balance(&pubkey).unwrap();
+
+// Simulate multiple times
+for _ in 0..10 {
+    svm.simulate_transaction(tx.clone()).unwrap();
 }
 
-// ✅ Fast - batch setup
-let accounts: Vec<_> = (0..100)
-    .map(|_| {
-        let account = Keypair::new();
-        svm.set_account(account.pubkey(), Account {
-            lamports: 1_000_000_000,
-            // ...
-        }).unwrap();
-        account
-    })
-    .collect();
+// Balance unchanged
+assert_eq!(svm.get_balance(&pubkey).unwrap(), balance_before);
 ```
 
-## Debugging Tips
+## Transaction Metadata
 
-### Capture All Logs
+Both `send_transaction()` and `simulate_transaction()` return `TransactionMetadata`:
+
+```rust
+pub struct TransactionMetadata {
+    pub signature: Signature,
+    pub logs: Vec<String>,
+    pub compute_units_consumed: u64,
+    pub return_data: TransactionReturnData,
+    pub inner_instructions: InnerInstructionsList,
+}
+```
+
+### Accessing Transaction Data
+
+```rust
+let result = svm.send_transaction(tx).unwrap();
+
+// Signature
+println!("Signature: {}", result.signature);
+
+// Logs
+for log in &result.logs {
+    println!("{}", log);
+}
+
+// Compute units
+println!("CU consumed: {}", result.compute_units_consumed);
+
+// Return data
+if let Some(data) = result.return_data.data {
+    println!("Program returned: {:?}", data);
+}
+
+// Inner instructions (CPIs)
+for inner in &result.inner_instructions {
+    println!("CPI: {:?}", inner);
+}
+```
+
+## Debugging
+
+### Log Inspection
 
 ```rust
 let result = svm.send_transaction(tx);
 
 match result {
     Ok(meta) => {
-        println!("=== SUCCESS ===");
-        for log in &meta.logs {
-            println!("{}", log);
-        }
+        // Check for specific log messages
+        assert!(meta.logs.iter().any(|log|
+            log.contains("Transfer successful")
+        ));
+
+        // Check log order
+        assert!(meta.logs[0].contains("Program invoke"));
     }
     Err(e) => {
-        println!("=== FAILURE ===");
-        println!("Error: {:?}", e.err);
+        // Logs available even on failure
         for log in &e.meta.logs {
             println!("{}", log);
         }
@@ -361,22 +647,7 @@ match result {
 }
 ```
 
-### Assert on Specific Logs
-
-```rust
-let result = svm.send_transaction(tx).unwrap();
-
-// Check for specific log message
-assert!(result.logs.iter().any(|log|
-    log.contains("Transfer successful")
-));
-
-// Check log order
-assert!(result.logs[0].contains("Program invoke"));
-assert!(result.logs.last().unwrap().contains("Success"));
-```
-
-### Track Compute Units
+### Compute Unit Tracking
 
 ```rust
 let result = svm.send_transaction(tx).unwrap();
@@ -384,12 +655,32 @@ let result = svm.send_transaction(tx).unwrap();
 println!("Compute units used: {}", result.compute_units_consumed);
 
 // Assert within budget
-assert!(result.compute_units_consumed < 100_000);
+assert!(
+    result.compute_units_consumed < 100_000,
+    "Transaction used too many compute units"
+);
 ```
 
-## Integration with Test Frameworks
+### Account State Inspection
 
-### With `rstest` for Parameterized Tests
+```rust
+// Before transaction
+let before = svm.get_account(&pubkey).unwrap();
+
+// Execute
+svm.send_transaction(tx).unwrap();
+
+// After transaction
+let after = svm.get_account(&pubkey).unwrap();
+
+// Compare
+assert_ne!(before.lamports, after.lamports);
+assert_ne!(before.data, after.data);
+```
+
+## Test Framework Integration
+
+### With rstest
 
 ```rust
 use rstest::rstest;
@@ -403,47 +694,30 @@ fn test_transfer_amounts(
     #[case] should_succeed: bool,
 ) {
     let mut svm = LiteSVM::new();
-    // ... test with different amounts
+    let result = test_transfer(&mut svm, amount);
+    assert_eq!(result.is_ok(), should_succeed);
 }
 ```
 
-### With `proptest` for Property Testing
+### With proptest
 
 ```rust
 use proptest::prelude::*;
 
 proptest! {
     #[test]
-    fn test_transfer_properties(
-        amount in 1u64..1_000_000_000,
-    ) {
+    fn test_transfer_properties(amount in 1u64..1_000_000_000) {
         let mut svm = LiteSVM::new();
-        // ... property-based testing
+        let payer = Keypair::new();
+        svm.airdrop(&payer.pubkey(), amount).unwrap();
+
+        // Property: balance equals airdrop amount
+        assert_eq!(svm.get_balance(&payer.pubkey()).unwrap(), amount);
     }
 }
 ```
 
-<Callout type="tip">
-  LiteSVM's deterministic execution makes it perfect for property-based testing
-  - the same inputs always produce the same outputs.
+<Callout type="info">
+  LiteSVM's deterministic execution makes it ideal for property-based testing.
+  Same inputs always produce same outputs.
 </Callout>
-
-## Common Gotchas
-
-1. **Custom programs must be deployed before use** - Use `add_program()` for your own programs
-2. **Blockhashes expire after `expire_blockhash()`** - Get fresh ones with `latest_blockhash()`
-3. **State persists between transactions** - Unlike real validators, no automatic cleanup
-4. **No parallel execution** - Transactions execute sequentially
-5. **No network delays** - Everything is instant, which might hide timing bugs
-
-## Summary
-
-LiteSVM gives you complete control over the Solana runtime for testing. Use these advanced features to:
-
-- Test edge cases with custom configurations
-- Manipulate time for time-locked features
-- Create impossible states for negative testing
-- Optimize test performance
-- Debug with full visibility
-
-Remember: with great power comes great responsibility - make sure your tests still reflect realistic scenarios!
