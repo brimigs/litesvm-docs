@@ -1,6 +1,6 @@
 ---
 title: Why LiteSVM
-description: Understanding how LiteSVM works and why it's different
+description: Understand how LiteSVM works and why it's different
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -15,12 +15,12 @@ your code.
 
 ```rust
 // Traditional approach - slow and complex
-let validator = TestValidator::new(); // Starts separate process
+let validator = TestValidator::new().await; // Starts separate process
 let client = RpcClient::new(validator.url()); // Network connection
 
 // Every operation is async and goes over network
 let balance = client.get_balance(&pubkey).await?;
-thread::sleep(Duration::from_secs(1)); // Wait for confirmation
+tokio::time::sleep(Duration::from_secs(1)).await; // Wait for confirmation
 ```
 
 ### LiteSVM Testing
@@ -41,13 +41,11 @@ No `async`, no `await`, no delays:
 
 ```rust
 // Send transaction and check result immediately
-svm.send_transaction(tx)?;
-let balance = svm.get_balance(&account)?; // Already updated!
+svm.send_transaction(tx).unwrap();
+let balance = svm.get_balance(&account).unwrap(); // Already updated!
 ```
 
 ### 2. Direct State Manipulation
-
-Set up any test state directly:
 
 ```rust
 // Create any account with any data
@@ -57,7 +55,7 @@ svm.set_account(pubkey, Account {
     owner: program_id,
     executable: false,
     rent_epoch: 0,
-})?;
+}).unwrap();
 ```
 
 ### 3. Time is Under Your Control
@@ -91,80 +89,8 @@ match svm.send_transaction(tx) {
 }
 ```
 
-## Common Patterns
-
-### Test Setup Helper
-
-Create a reusable setup function:
-
-```rust
-fn setup_test() -> (LiteSVM, Keypair) {
-    let mut svm = LiteSVM::new();
-    let payer = Keypair::new();
-    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-    (svm, payer)
-}
-
-#[test]
-fn test_something() {
-    let (mut svm, payer) = setup_test();
-    // Your test here
-}
-```
-
-### State Verification Pattern
-
-```rust
-#[test]
-fn test_state_change() {
-    let mut svm = LiteSVM::new();
-
-    // Capture initial state
-    let before = svm.get_account(&pubkey);
-
-    // Execute operation
-    svm.send_transaction(tx)?;
-
-    // Verify state changed
-    let after = svm.get_account(&pubkey);
-    assert_ne!(before, after);
-}
-```
-
-### Error Testing Pattern
-
-```rust
-#[test]
-fn test_error_handling() {
-    let mut svm = LiteSVM::new();
-
-    // Set up invalid state
-    let tx = create_invalid_transaction();
-
-    // Verify it fails as expected
-    let result = svm.send_transaction(tx);
-    assert!(result.is_err());
-
-    if let Err(e) = result {
-        assert_eq!(e.err, TransactionError::InsufficientFunds);
-    }
-}
-```
-
-## Performance Tips
-
-<div className="space-y-4 mt-6">
-
-- Reuse `LiteSVM` instances when testing multiple scenarios
-- Use `include_bytes!` for program binaries
-- Keep test data small and focused
-
-</div>
-
 ## Next Steps
 
-Now that you understand the concepts:
-
-- **[Testing Your Program →](/docs/testing-your-program)** - Learn how to test your own Solana program
-- **[Testing Recipes →](/docs/examples)** - Copy-paste solutions for common scenarios
-- **[Complete Examples on Github →](/docs/complete-examples)** - Jump straight into full application examples
+- **[Testing Your Program →](/docs/testing-your-program)** Learn how to test your own Solana program
+- **[Examples →](/docs/examples)** View copy-paste solutions for common scenarios and full repository examples
+- **[References →](/docs/complete-examples)** Learn advanced features and custom configurations
