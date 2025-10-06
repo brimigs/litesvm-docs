@@ -1,13 +1,9 @@
 ---
 title: SOL Transfer
-description: Test transferring SOL between accounts
+description: How to transfer SOL between accounts
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
-
-## Overview
-
-This example demonstrates how to test a basic SOL transfer between two accounts using LiteSVM.
 
 ## Complete Test
 
@@ -52,9 +48,9 @@ fn test_sol_transfer() {
     assert_eq!(svm.get_balance(&bob.pubkey()).unwrap(), 1_000_000_000);
     assert!(svm.get_balance(&alice.pubkey()).unwrap() < 9_000_000_000);
 
-    println!("✅ Transfer successful!");
-    println!("   Compute units used: {}", result.compute_units_consumed);
-    println!("   Transaction logs: {:?}", result.logs);
+    println!("Transfer successful!");
+    println!("Compute units used: {}", result.compute_units_consumed);
+    println!("Transaction logs: {:?}", result.pretty_logs);
 }
 ```
 

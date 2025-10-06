@@ -1,13 +1,9 @@
 ---
 title: PDA Creation
-description: Create and interact with Program Derived Addresses
+description: How to create and interact with Program Derived Addresses
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
-
-## Overview
-
-This example demonstrates how to create and test Program Derived Addresses (PDAs) in LiteSVM.
 
 ## Complete Test
 
@@ -16,7 +12,6 @@ use litesvm::LiteSVM;
 use solana_sdk::{
     account::Account,
     pubkey::Pubkey,
-    signature::{Keypair, Signer},
 };
 
 #[test]
@@ -25,8 +20,6 @@ fn test_pda_creation() {
 
     // Program that owns the PDA
     let program_id = Pubkey::new_unique();
-    let program_bytes = include_bytes!("../target/deploy/pda_program.so");
-    svm.add_program(program_id, program_bytes).unwrap();
 
     // Derive PDA address
     let seed = b"my_pda";
@@ -52,7 +45,7 @@ fn test_pda_creation() {
     assert_eq!(account.owner, program_id);
     assert_eq!(account.data[0], bump);
 
-    println!("✅ PDA created successfully!");
+    println!("PDA created successfully!");
 }
 ```
 

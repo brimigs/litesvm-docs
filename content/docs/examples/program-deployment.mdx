@@ -1,13 +1,9 @@
 ---
 title: Program Deployment
-description: Deploy and call a simple program
+description: How to deploy and call a simple program
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
-
-## Overview
-
-This example shows how to deploy a program to LiteSVM and call it with an instruction.
 
 ## Complete Test
 
@@ -27,7 +23,7 @@ fn test_program_deployment() {
     // Deploy the program
     let program_id = Pubkey::new_unique();
     let program_bytes = include_bytes!("../target/deploy/hello_world.so");
-    svm.add_program(program_id, program_bytes).unwrap();
+    svm.add_program(program_id, program_bytes);
 
     // Create payer account
     let payer = Keypair::new();
@@ -57,8 +53,8 @@ fn test_program_deployment() {
         log.contains(&format!("Program {} invoke", program_id))
     ));
 
-    println!("✅ Program called successfully!");
-    println!("   Logs: {:?}", result.logs);
+    println!("Program called successfully!");
+    println!("Logs: {:?}", result.pretty_logs);
 }
 ```
 
@@ -66,6 +62,8 @@ fn test_program_deployment() {
 
 1. **Program Deployment**: Use `add_program()` to deploy a program from bytes
 2. **include_bytes!**: Embeds the compiled program at compile time
-3. **Program ID**: Generate a unique ID or use the keypair from `target/deploy/`
+3. **Program ID**: Use the keypair from `target/deploy/`
 4. **Instructions**: Create custom instructions with program ID, accounts, and data
 5. **Log Verification**: Check transaction logs to verify program execution
+
+For more detailed deployment information, read [this section](/docs/testing-your-program/deploy).

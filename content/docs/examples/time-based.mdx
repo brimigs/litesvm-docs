@@ -37,7 +37,7 @@ fn test_time_locked_feature() {
     // Test time-locked feature is now available
     // ... your test logic ...
 
-    println!("✅ Time travel successful!");
+    println!("Time travel successful!");
 }
 ```
 
@@ -79,7 +79,7 @@ fn test_timestamp_based_feature() {
     let current_time = clock.unix_timestamp;
 
     // Warp forward 1 hour (3600 seconds)
-    let target_slot = clock.slot + (3600 / 0.4) as u64; // ~0.4s per slot
+    let target_slot = clock.slot + (3600.0 / 0.4) as u64; // ~0.4s per slot
     svm.warp_to_slot(target_slot);
 
     // Verify timestamp increased

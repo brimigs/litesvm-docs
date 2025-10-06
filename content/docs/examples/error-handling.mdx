@@ -1,13 +1,9 @@
 ---
 title: Error Handling
-description: Test error conditions and edge cases
+description: How to test error conditions and edge cases
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
-
-## Overview
-
-This example shows how to test that your program correctly handles error conditions.
 
 ## Complete Test
 
@@ -49,8 +45,8 @@ fn test_insufficient_funds_error() {
 
     let err = result.unwrap_err();
     match err.err {
-        TransactionError::InsufficientFundsForFee => {
-            println!("✅ Got expected error: InsufficientFundsForFee");
+        TransactionError::InstructionError(0, _) => {
+            println!("Got expected error: InstructionError (insufficient funds)");
         }
         _ => panic!("Got unexpected error: {:?}", err.err),
     }
