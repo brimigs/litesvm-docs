@@ -8,14 +8,29 @@ import { Callout } from "fumadocs-ui/components/callout";
 ## airdrop
 
 ```rust
-pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) -> Result<()>
+pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) -> TransactionResult
 ```
 
-Fund an account with lamports.
+Where `TransactionResult` is `Result<TransactionMetadata, FailedTransactionMetadata>`.
+
+Fund an account with lamports. Returns transaction metadata on success.
 
 ```rust
 let keypair = Keypair::new();
+
+// Option 1: Ignore result if you don't care about tx details
 svm.airdrop(&keypair.pubkey(), 10_000_000_000).unwrap();
+
+// Option 2: Check transaction metadata
+match svm.airdrop(&keypair.pubkey(), 10_000_000_000) {
+    Ok(meta) => {
+        println!("Airdrop successful");
+        println!("Compute units: {}", meta.compute_units_consumed);
+    }
+    Err(e) => {
+        println!("Airdrop failed: {:?}", e.err);
+    }
+}
 ```
 
 ## get_account
@@ -36,7 +51,7 @@ println!("Data length: {}", account.data.len());
 ## set_account
 
 ```rust
-pub fn set_account(&mut self, pubkey: Pubkey, account: Account) -> Result<()>
+pub fn set_account(&mut self, pubkey: Pubkey, account: Account) -> Result<(), LiteSVMError>
 ```
 
 Directly set account state.
@@ -56,13 +71,21 @@ svm.set_account(pubkey, Account {
 ## get_balance
 
 ```rust
-pub fn get_balance(&self, pubkey: &Pubkey) -> Result<u64>
+pub fn get_balance(&self, pubkey: &Pubkey) -> Option<u64>
 ```
 
-Get account lamport balance.
+Get account lamport balance. Returns `None` if account doesn't exist.
 
 ```rust
-let balance = svm.get_balance(&pubkey).unwrap();
+// Check if account exists and get balance
+if let Some(balance) = svm.get_balance(&pubkey) {
+    println!("Balance: {} lamports", balance);
+} else {
+    println!("Account doesn't exist");
+}
+
+// Or use unwrap_or for default
+let balance = svm.get_balance(&pubkey).unwrap_or(0);
 println!("Balance: {} lamports", balance);
 ```
 

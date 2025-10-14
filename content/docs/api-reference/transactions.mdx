@@ -36,23 +36,35 @@ match svm.send_transaction(tx) {
 ## simulate_transaction
 
 ```rust
-pub fn simulate_transaction(&self, tx: impl Into<VersionedTransaction>) -> Result<TransactionMetadata, FailedTransactionMetadata>
+pub fn simulate_transaction(&self, tx: impl Into<VersionedTransaction>) -> Result<SimulatedTransactionInfo, FailedTransactionMetadata>
 ```
 
 Simulate transaction without modifying state.
 
+Returns `SimulatedTransactionInfo` which contains:
+- `meta`: Transaction metadata (logs, compute units, signature, etc.)
+- `post_accounts`: Account states after simulation
+
 ```rust
 // State before simulation
-let balance_before = svm.get_balance(&pubkey).unwrap();
+let balance_before = svm.get_balance(&pubkey).unwrap_or(0);
 
 // Simulate transaction
 let result = svm.simulate_transaction(tx.clone());
 
 // State unchanged
-assert_eq!(svm.get_balance(&pubkey).unwrap(), balance_before);
+assert_eq!(svm.get_balance(&pubkey).unwrap_or(0), balance_before);
 
-// Check if transaction would succeed
-if result.is_ok() {
+// Check simulation result
+if let Ok(sim_info) = result {
+    println!("Would succeed");
+    println!("Compute units: {}", sim_info.meta.compute_units_consumed);
+
+    // Can inspect post_accounts to see what would change
+    for (pubkey, account) in sim_info.post_accounts {
+        println!("Account {} would have {} lamports", pubkey, account.lamports());
+    }
+
     // Safe to send
     svm.send_transaction(tx).unwrap();
 }
@@ -72,9 +84,9 @@ Use `simulate_transaction()` to:
 let result = svm.simulate_transaction(tx.clone());
 
 match result {
-    Ok(meta) => {
+    Ok(sim_info) => {
         println!("Would succeed");
-        println!("Compute units: {}", meta.compute_units_consumed);
+        println!("Compute units: {}", sim_info.meta.compute_units_consumed);
 
         // Now execute for real
         svm.send_transaction(tx).unwrap();
@@ -104,7 +116,7 @@ match result.unwrap_err().err {
 ## State Remains Unchanged
 
 ```rust
-let balance_before = svm.get_balance(&pubkey).unwrap();
+let balance_before = svm.get_balance(&pubkey).unwrap_or(0);
 
 // Simulate multiple times
 for _ in 0..10 {
@@ -112,12 +124,12 @@ for _ in 0..10 {
 }
 
 // Balance unchanged
-assert_eq!(svm.get_balance(&pubkey).unwrap(), balance_before);
+assert_eq!(svm.get_balance(&pubkey).unwrap_or(0), balance_before);
 ```
 
 ## Transaction Metadata
 
-Both `send_transaction()` and `simulate_transaction()` return `TransactionMetadata`:
+`send_transaction()` returns `TransactionMetadata` directly, while `simulate_transaction()` returns `SimulatedTransactionInfo` which contains `meta: TransactionMetadata`:
 
 ```rust
 pub struct TransactionMetadata {
