@@ -28,6 +28,12 @@ Several Solana crates enhance the testing experience by providing essential type
 cargo add --dev solana-sdk
 ```
 
+<Callout type="warning"> Dependency Versions: LiteSVM depends on several Solana crates. If your project uses different versions, you may run into type mismatches or build errors. To verify the versions in use, run:
+
+```bash
+cargo tree -p litesvm
+```
+
 </Step>
 
 <Step>
