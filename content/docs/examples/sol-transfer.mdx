@@ -50,7 +50,7 @@ fn test_sol_transfer() {
 
     println!("Transfer successful!");
     println!("Compute units used: {}", result.compute_units_consumed);
-    println!("Transaction logs: {:?}", result.pretty_logs);
+    println!("Transaction logs:\n{}", result.pretty_logs());
 }
 ```
 
