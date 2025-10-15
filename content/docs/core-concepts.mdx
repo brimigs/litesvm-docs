@@ -30,7 +30,7 @@ tokio::time::sleep(Duration::from_secs(1)).await; // Wait for confirmation
 let mut svm = LiteSVM::new(); // Just a struct in memory
 
 // Everything is synchronous and immediate
-let balance = svm.get_balance(&pubkey)?;
+let balance = svm.get_balance(&pubkey).unwrap_or(0);
 ```
 
 ## Key Principles

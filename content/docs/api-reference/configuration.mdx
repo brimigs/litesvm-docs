@@ -68,6 +68,24 @@ let mut svm = LiteSVM::default()
     .with_transaction_history(100);
 ```
 
+## with_log_bytes_limit
+
+```rust
+pub fn with_log_bytes_limit(self, limit: Option<usize>) -> Self
+```
+
+Set maximum bytes for transaction logs. Default: `Some(10_000)`.
+
+```rust
+// Unlimited logs
+let mut svm = LiteSVM::default()
+    .with_log_bytes_limit(None);
+
+// Custom limit (50KB)
+let mut svm = LiteSVM::default()
+    .with_log_bytes_limit(Some(50_000));
+```
+
 ## with_lamports
 
 ```rust
@@ -97,18 +115,14 @@ let mut svm = LiteSVM::default()
 ## with_sysvars
 
 ```rust
-pub fn with_sysvars(self, sysvars: Vec<(Pubkey, Vec<u8>)>) -> Self
+pub fn with_sysvars(self) -> Self
 ```
 
-Set custom sysvar values at initialization.
+Includes default sysvars (Clock, Rent, EpochSchedule, SlotHashes, StakeHistory, etc.).
 
 ```rust
-use solana_sdk::sysvar;
-
 let mut svm = LiteSVM::default()
-    .with_sysvars(vec![
-        // Custom sysvars
-    ]);
+    .with_sysvars();
 ```
 
 ## with_feature_set
@@ -126,3 +140,25 @@ use std::sync::Arc;
 let mut svm = LiteSVM::default()
     .with_feature_set(Arc::new(FeatureSet::all_enabled()));
 ```
+
+## with_precompiles
+
+```rust
+#[cfg(feature = "precompiles")]
+pub fn with_precompiles(self) -> Self
+```
+
+Includes standard precompile programs (ed25519, secp256k1, secp256r1).
+
+```rust
+let mut svm = LiteSVM::default()
+    .with_precompiles();
+```
+
+<Callout type="info">
+  Requires the `precompiles` feature flag:
+  ```toml
+  [dev-dependencies]
+  litesvm = { version = "0.8", features = ["precompiles"] }
+  ```
+</Callout>
