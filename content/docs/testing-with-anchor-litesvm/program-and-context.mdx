@@ -1,0 +1,376 @@
+---
+title: Program & Context
+description: Setting up test environments and building instructions with AnchorContext and Program
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+## Setting Up the Test Environment
+
+The `AnchorLiteSVM` builder provides a fluent API for configuring your test environment.
+
+### Basic Setup
+
+```rust
+use anchor_litesvm::{AnchorLiteSVM, AnchorContext};
+use solana_sdk::pubkey::Pubkey;
+
+// Define your program ID
+const PROGRAM_ID: Pubkey = solana_sdk::pubkey!("YourProgram11111111111111111111111111111111");
+
+#[test]
+fn test_basic_setup() {
+    // Build context with your program
+    let ctx: AnchorContext = AnchorLiteSVM::new()
+        .deploy_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"))
+        .build();
+
+    // Context is ready to use
+    println!("Program deployed: {}", ctx.program().id());
+}
+```
+
+### Single Program Shorthand
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+
+#[test]
+fn test_single_program() {
+    // Convenience method for single-program setups
+    let ctx = AnchorLiteSVM::build_with_program(
+        PROGRAM_ID,
+        include_bytes!("../target/deploy/your_program.so"),
+    );
+}
+```
+
+### Multiple Programs
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::pubkey::Pubkey;
+
+const PROGRAM_A: Pubkey = solana_sdk::pubkey!("ProgramA1111111111111111111111111111111111");
+const PROGRAM_B: Pubkey = solana_sdk::pubkey!("ProgramB1111111111111111111111111111111111");
+
+#[test]
+fn test_multiple_programs() {
+    // Deploy multiple programs - first one becomes primary
+    let ctx = AnchorLiteSVM::build_with_programs(&[
+        (PROGRAM_A, include_bytes!("../target/deploy/program_a.so")),
+        (PROGRAM_B, include_bytes!("../target/deploy/program_b.so")),
+    ]);
+
+    // Primary program is PROGRAM_A
+    assert_eq!(ctx.program().id(), PROGRAM_A);
+}
+```
+
+### Custom Payer
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::signature::Keypair;
+
+#[test]
+fn test_custom_payer() {
+    let custom_payer = Keypair::new();
+
+    let ctx = AnchorLiteSVM::new()
+        .with_payer(custom_payer)
+        .deploy_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"))
+        .build();
+
+    // Use the custom payer
+    println!("Payer: {}", ctx.payer().pubkey());
+}
+```
+
+<Callout type="info">
+  If you don't specify a payer, `AnchorLiteSVM` automatically creates and funds one for you.
+</Callout>
+
+## The AnchorContext
+
+`AnchorContext` is the main interface for interacting with your test environment.
+
+### Core Properties
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::signature::Signer;
+
+#[test]
+fn test_context_properties() {
+    let ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    // Access the underlying LiteSVM instance
+    let svm = &ctx.svm;
+
+    // Get the payer keypair
+    let payer = ctx.payer();
+    println!("Payer pubkey: {}", payer.pubkey());
+
+    // Get the Program instance
+    let program = ctx.program();
+    println!("Program ID: {}", program.id());
+
+    // Get the latest blockhash
+    let blockhash = ctx.latest_blockhash();
+}
+```
+
+### Creating Funded Accounts
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::native_token::LAMPORTS_PER_SOL;
+
+#[test]
+fn test_create_accounts() {
+    let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    // Create a funded account
+    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+
+    // Or airdrop to an existing address
+    let another_user = solana_sdk::signature::Keypair::new();
+    ctx.airdrop(&another_user.pubkey(), 5 * LAMPORTS_PER_SOL);
+}
+```
+
+### Checking Account Existence
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::pubkey::Pubkey;
+
+#[test]
+fn test_account_exists() {
+    let ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    let some_pda = Pubkey::new_unique();
+
+    if ctx.account_exists(&some_pda) {
+        println!("Account exists!");
+    } else {
+        println!("Account not found");
+    }
+}
+```
+
+## Building Instructions with Program
+
+The `Program` struct provides a fluent API for building instructions that mirrors anchor-client.
+
+### Basic Instruction Building
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use anchor_lang::prelude::*;
+use solana_sdk::signature::Signer;
+
+// Your instruction accounts struct (from your Anchor program)
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+// Your instruction data (from your Anchor program)
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct InitializeArgs {
+    pub name: String,
+}
+
+#[test]
+fn test_build_instruction() {
+    let ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    let user = ctx.payer();
+
+    // Build instruction using fluent API
+    let ix = ctx.program()
+        .accounts(Initialize {
+            user: user.pubkey(),
+            system_program: solana_sdk::system_program::id(),
+        })
+        .args(InitializeArgs {
+            name: "test".to_string(),
+        })
+        .instruction()
+        .unwrap();
+
+    println!("Instruction built successfully!");
+}
+```
+
+<Callout type="tip">
+  The `.accounts()` method accepts any type that implements `ToAccountMetas`, which all Anchor account structs do automatically.
+</Callout>
+
+### Executing Instructions
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::{native_token::LAMPORTS_PER_SOL, signature::Signer};
+
+#[test]
+fn test_execute_instruction() {
+    let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+
+    let ix = ctx.program()
+        .accounts(Initialize {
+            user: user.pubkey(),
+            system_program: solana_sdk::system_program::id(),
+        })
+        .args(InitializeArgs { name: "test".to_string() })
+        .instruction()
+        .unwrap();
+
+    // Execute single instruction
+    ctx.execute_instruction(ix, &[&user]).unwrap();
+}
+```
+
+### Executing Multiple Instructions
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::{native_token::LAMPORTS_PER_SOL, signature::Signer};
+
+#[test]
+fn test_execute_multiple_instructions() {
+    let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+
+    let ix1 = ctx.program()
+        .accounts(Initialize { /* ... */ })
+        .args(InitializeArgs { name: "first".to_string() })
+        .instruction()
+        .unwrap();
+
+    let ix2 = ctx.program()
+        .accounts(Update { /* ... */ })
+        .args(UpdateArgs { name: "second".to_string() })
+        .instruction()
+        .unwrap();
+
+    // Execute multiple instructions in one transaction
+    ctx.execute_instructions(vec![ix1, ix2], &[&user]).unwrap();
+}
+```
+
+### Using send_and_confirm_transaction
+
+```rust
+use anchor_litesvm::AnchorLiteSVM;
+use solana_sdk::{
+    message::Message,
+    signature::Signer,
+    transaction::Transaction,
+};
+
+#[test]
+fn test_send_transaction() {
+    let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
+
+    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+
+    let ix = ctx.program()
+        .accounts(Initialize { /* ... */ })
+        .args(InitializeArgs { name: "test".to_string() })
+        .instruction()
+        .unwrap();
+
+    // Build transaction manually if needed
+    let message = Message::new(&[ix], Some(&ctx.payer().pubkey()));
+    let tx = Transaction::new(&[ctx.payer(), &user], message, ctx.latest_blockhash());
+
+    // Send and confirm
+    ctx.send_and_confirm_transaction(tx).unwrap();
+}
+```
+
+## Complete Example
+
+Here's a comprehensive example demonstrating the full workflow:
+
+```rust
+use anchor_litesvm::{AnchorLiteSVM, AnchorContext};
+use anchor_lang::prelude::*;
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    pubkey::Pubkey,
+};
+
+declare_id!("YourProgram11111111111111111111111111111111");
+
+#[account]
+pub struct UserAccount {
+    pub name: String,
+    pub balance: u64,
+}
+
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(
+        init,
+        payer = user,
+        space = 8 + 32 + 8,
+        seeds = [b"user", user.key().as_ref()],
+        bump
+    )]
+    pub user_account: Account<'info, UserAccount>,
+    pub system_program: Program<'info, System>,
+}
+
+#[test]
+fn test_complete_workflow() {
+    // 1. Setup test environment
+    let mut ctx = AnchorLiteSVM::new()
+        .deploy_program(id(), include_bytes!("../target/deploy/your_program.so"))
+        .build();
+
+    // 2. Create test user
+    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+
+    // 3. Derive PDA
+    let (user_pda, _bump) = Pubkey::find_program_address(
+        &[b"user", user.pubkey().as_ref()],
+        &id(),
+    );
+
+    // 4. Build instruction
+    let ix = ctx.program()
+        .accounts(Initialize {
+            user: user.pubkey(),
+            user_account: user_pda,
+            system_program: solana_sdk::system_program::id(),
+        })
+        .args(instruction::Initialize {
+            name: "Alice".to_string(),
+        })
+        .instruction()
+        .unwrap();
+
+    // 5. Execute
+    ctx.execute_instruction(ix, &[&user]).unwrap();
+
+    // 6. Verify
+    let account: UserAccount = ctx.get_account(&user_pda).unwrap();
+    assert_eq!(account.name, "Alice");
+
+    println!("Test passed!");
+}
+```

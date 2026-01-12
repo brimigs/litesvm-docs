@@ -1,0 +1,356 @@
+---
+title: Transaction Helpers
+description: Execute transactions and analyze results with rich error handling
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+
+## Sending Transactions
+
+The `TransactionHelpers` trait provides convenient methods for sending instructions and analyzing results.
+
+### Send a Single Instruction
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_send_instruction() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    // Create a transfer instruction
+    let transfer_ix = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        LAMPORTS_PER_SOL,
+    );
+
+    // Send and get result
+    let result = svm.send_instruction(transfer_ix, &[&alice]);
+
+    // Assert it succeeded
+    result.assert_success();
+}
+```
+
+### Send Multiple Instructions
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_send_multiple_instructions() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+    let carol = svm.create_funded_account(0);
+
+    // Create multiple transfer instructions
+    let instructions = vec![
+        system_instruction::transfer(&alice.pubkey(), &bob.pubkey(), LAMPORTS_PER_SOL),
+        system_instruction::transfer(&alice.pubkey(), &carol.pubkey(), LAMPORTS_PER_SOL),
+    ];
+
+    // Send all in one transaction
+    let result = svm.send_instructions(instructions, &[&alice]);
+    result.assert_success();
+}
+```
+
+## TransactionResult
+
+The `send_instruction` and `send_instructions` methods return a `TransactionResult` that wraps the transaction metadata with useful testing utilities.
+
+### Assert Success
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_assert_success() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    let ix = system_instruction::transfer(&alice.pubkey(), &bob.pubkey(), LAMPORTS_PER_SOL);
+    let result = svm.send_instruction(ix, &[&alice]);
+
+    // Panics with detailed logs if the transaction failed
+    result.assert_success();
+}
+```
+
+<Callout type="info">
+  `assert_success()` will panic with the full transaction logs if the transaction failed, making debugging much easier.
+</Callout>
+
+### Assert Failure
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_assert_failure() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(1 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    // Try to transfer more than Alice has
+    let ix = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        100 * LAMPORTS_PER_SOL, // Alice only has 1 SOL
+    );
+    let result = svm.send_instruction(ix, &[&alice]);
+
+    // This should fail
+    result.assert_failure();
+}
+```
+
+### Assert Specific Error
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_assert_error() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(1 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    let ix = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        100 * LAMPORTS_PER_SOL,
+    );
+    let result = svm.send_instruction(ix, &[&alice]);
+
+    // Assert a specific error message is present
+    result.assert_error("insufficient lamports");
+}
+```
+
+### Assert Error Code
+
+For custom program errors, you can assert on the error code:
+
+```rust
+// Assert a specific custom error code
+result.assert_error_code(6000); // Custom error code from your program
+```
+
+### Assert Anchor Error
+
+For Anchor programs, assert on error names:
+
+```rust
+// Assert an Anchor-specific error
+result.assert_anchor_error("InsufficientFunds");
+```
+
+## Inspecting Transactions
+
+### Check Transaction Logs
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_check_logs() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    let ix = system_instruction::transfer(&alice.pubkey(), &bob.pubkey(), LAMPORTS_PER_SOL);
+    let result = svm.send_instruction(ix, &[&alice]);
+
+    // Check if a specific message is in the logs
+    if result.has_log("Transfer") {
+        println!("Found transfer log!");
+    }
+
+    // Find a log matching a pattern
+    if let Some(log) = result.find_log("Program") {
+        println!("Found log: {}", log);
+    }
+
+    // Get all logs
+    let logs = result.logs();
+    for log in logs {
+        println!("{}", log);
+    }
+}
+```
+
+### Print Logs for Debugging
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_print_logs() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    let ix = system_instruction::transfer(&alice.pubkey(), &bob.pubkey(), LAMPORTS_PER_SOL);
+    let result = svm.send_instruction(ix, &[&alice]);
+
+    // Print formatted logs for debugging
+    result.print_logs();
+}
+```
+
+### Check Compute Units
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_compute_units() {
+    let mut svm = LiteSVM::new();
+
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    let ix = system_instruction::transfer(&alice.pubkey(), &bob.pubkey(), LAMPORTS_PER_SOL);
+    let result = svm.send_instruction(ix, &[&alice]);
+
+    let compute_units = result.compute_units();
+    println!("Compute units consumed: {}", compute_units);
+
+    // Assert compute usage is within expected bounds
+    assert!(compute_units < 10_000, "Transaction used too many compute units");
+}
+```
+
+<Callout type="tip">
+  Monitoring compute units is useful for optimization. Solana limits transactions to 1.4M compute units, and higher usage costs more.
+</Callout>
+
+## Complete Example
+
+Here's a comprehensive example demonstrating transaction helpers:
+
+```rust
+use litesvm::LiteSVM;
+use litesvm_utils::{TestHelpers, AssertionHelpers, TransactionHelpers};
+use solana_sdk::{
+    native_token::LAMPORTS_PER_SOL,
+    signature::Signer,
+    system_instruction,
+};
+
+#[test]
+fn test_transaction_workflow() {
+    let mut svm = LiteSVM::new();
+
+    // Setup accounts
+    let alice = svm.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let bob = svm.create_funded_account(0);
+
+    // Test successful transfer
+    let transfer_ix = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        2 * LAMPORTS_PER_SOL,
+    );
+
+    let result = svm.send_instruction(transfer_ix, &[&alice]);
+
+    // Verify success
+    result.assert_success();
+
+    // Check compute usage
+    let cu = result.compute_units();
+    println!("Transfer used {} compute units", cu);
+
+    // Verify balances
+    svm.assert_sol_balance(&bob.pubkey(), 2 * LAMPORTS_PER_SOL);
+
+    // Test expected failure
+    let bad_transfer = system_instruction::transfer(
+        &alice.pubkey(),
+        &bob.pubkey(),
+        100 * LAMPORTS_PER_SOL, // More than Alice has
+    );
+
+    let fail_result = svm.send_instruction(bad_transfer, &[&alice]);
+    fail_result.assert_failure();
+
+    // Print logs for debugging
+    fail_result.print_logs();
+
+    println!("Transaction workflow test passed!");
+}
+```
+
+## Error Types
+
+The `TransactionError` enum provides structured error information:
+
+| Variant | Description |
+| ------- | ----------- |
+| `ExecutionFailed(String)` | Transaction execution failed with message |
+| `BuildError(String)` | Failed to build the transaction |
+| `AssertionFailed(String)` | An assertion on the result failed |

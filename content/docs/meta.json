@@ -4,11 +4,11 @@
     "getting-started",
     "core-concepts",
     "testing-your-program",
-    "testing-with-spl-tokens",
     "examples",
-    "complete-examples",
-    "debugging",
-    "best-practices",
-    "api-reference"
+    "api-reference",
+    "---Additional Crates---",
+    "testing-with-litesvm-utils",
+    "testing-with-spl-tokens",
+    "testing-with-anchor-litesvm"
   ]
 }
