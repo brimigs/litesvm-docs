@@ -4,6 +4,7 @@ description: Understand how LiteSVM works and why it's different
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 
 ## Overview
 
@@ -12,6 +13,9 @@ a separate process, not as a network service - it's just a library call in
 your code.
 
 ### Traditional Testing
+
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 
 ```rust
 // Traditional approach - slow and complex
@@ -23,7 +27,25 @@ let balance = client.get_balance(&pubkey).await?;
 tokio::time::sleep(Duration::from_secs(1)).await; // Wait for confirmation
 ```
 
+</Tab>
+<Tab value="TypeScript">
+
+```typescript
+// Traditional approach - slow and complex
+const validator = await startTestValidator(); // Starts separate process
+const rpc = createSolanaRpc(validator.url);
+
+// Every operation is async and goes over network
+const balance = await rpc.getBalance(address).send();
+```
+
+</Tab>
+</Tabs>
+
 ### LiteSVM Testing
+
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 
 ```rust
 // LiteSVM - fast and simple
@@ -33,11 +55,28 @@ let mut svm = LiteSVM::new(); // Just a struct in memory
 let balance = svm.get_balance(&pubkey).unwrap_or(0);
 ```
 
+</Tab>
+<Tab value="TypeScript">
+
+```typescript
+// LiteSVM - fast and simple
+const client = createEmptyClient().use(litesvm()); // Just an object in memory
+
+// Everything is synchronous and immediate
+const balance = client.svm.getBalance(pubkey) ?? 0n;
+```
+
+</Tab>
+</Tabs>
+
 ## Key Principles
 
 ### 1. Everything is Synchronous
 
 No `async`, no `await`, no delays:
+
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 
 ```rust
 // Send transaction and check result immediately
@@ -45,7 +84,22 @@ svm.send_transaction(tx).unwrap();
 let balance = svm.get_balance(&account).unwrap(); // Already updated!
 ```
 
+</Tab>
+<Tab value="TypeScript">
+
+```typescript
+// Send transaction and check result immediately
+client.svm.sendTransaction(signedTx);
+const balance = client.svm.getBalance(account); // Already updated!
+```
+
+</Tab>
+</Tabs>
+
 ### 2. Direct State Manipulation
+
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 
 ```rust
 // Create any account with any data
@@ -58,7 +112,27 @@ svm.set_account(pubkey, Account {
 }).unwrap();
 ```
 
+</Tab>
+<Tab value="TypeScript">
+
+```typescript
+// Create any account with any data
+client.svm.setAccount(pubkey, {
+    lamports: 1_000_000_000n,
+    data: new Uint8Array([1, 2, 3, 4]),
+    owner: programId,
+    executable: false,
+    rentEpoch: 0n,
+});
+```
+
+</Tab>
+</Tabs>
+
 ### 3. Time is Under Your Control
+
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 
 ```rust
 // Jump to any slot instantly
@@ -73,7 +147,33 @@ clock.unix_timestamp = 1735689600; // Jan 1, 2025
 svm.set_sysvar(&clock);
 ```
 
+</Tab>
+<Tab value="TypeScript">
+
+```typescript
+// Jump to any slot instantly
+client.svm.warpToSlot(1000n);
+
+// Expire blockhashes on demand
+client.svm.expireBlockhash();
+
+// Set the clock sysvar
+client.svm.setClock({
+    slot: 1000n,
+    epochStartTimestamp: 0n,
+    epoch: 0n,
+    leaderScheduleEpoch: 0n,
+    unixTimestamp: 1735689600n, // Jan 1, 2025
+});
+```
+
+</Tab>
+</Tabs>
+
 ### 4. Errors are Immediate and Clear
+
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 
 ```rust
 match svm.send_transaction(tx) {
@@ -89,8 +189,36 @@ match svm.send_transaction(tx) {
 }
 ```
 
+</Tab>
+<Tab value="TypeScript">
+
+```typescript
+const result = client.svm.sendTransaction(signedTx);
+
+if ('err' in result && result.err()) {
+    // Error with full details
+    console.log('Error:', result.err());
+    console.log('Logs:', result.logs());
+} else {
+    // Transaction succeeded
+    console.log('Compute units:', result.computeUnitsConsumed());
+}
+```
+
+</Tab>
+</Tabs>
+
 ## Next Steps
 
+<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tab value="Rust">
 - **[Testing Your Program →](/docs/testing-your-program)** Learn how to test your own Solana program
 - **[Examples →](/docs/examples)** View copy-paste solutions for common scenarios and full repository examples
 - **[API Reference →](/docs/api-reference)** Learn advanced features and custom configurations
+</Tab>
+<Tab value="TypeScript">
+- **[Testing Your Program →](/docs/typescript/getting-started)** Learn how to test your own Solana program using LiteSVM for TypeScript
+- **[Examples →](/docs/typescript/examples)** View copy-paste solutions for common scenarios
+- **[API Reference →](/docs/typescript/api-reference)** Learn advanced features and custom configurations
+</Tab>
+</Tabs>

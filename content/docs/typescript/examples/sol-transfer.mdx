@@ -1,0 +1,100 @@
+---
+title: SOL Transfer
+description: Build and send a SOL transfer transaction with LiteSVM
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# SOL Transfer Example
+
+Complete example of building and sending a SOL transfer transaction.
+
+## Full Example
+
+```typescript
+import {
+    appendTransactionMessageInstruction,
+    createEmptyClient,
+    createTransactionMessage,
+    lamports,
+    pipe,
+    setTransactionMessageFeePayerSigner,
+    setTransactionMessageLifetimeUsingBlockhash,
+    signTransactionMessageWithSigners,
+} from '@solana/kit';
+import { litesvm, payer } from '@solana/kit-plugins';
+import { getTransferSolInstruction } from '@solana-program/system';
+
+// Create client with LiteSVM and payer
+const client = createEmptyClient()
+    .use(litesvm())
+    .use(payer(mySigner));
+
+// Fund the payer
+client.svm.airdrop(client.payer.address, lamports(10_000_000_000n));
+
+// Check initial balances
+const senderInitial = client.svm.getBalance(client.payer.address) ?? 0n;
+console.log('Sender initial:', Number(senderInitial) / 1e9, 'SOL');
+
+// Build the transfer instruction
+const transferIx = getTransferSolInstruction({
+    source: client.payer,
+    destination: recipientAddress,
+    amount: lamports(1_000_000_000n), // 1 SOL
+});
+
+// Build the transaction message
+const transactionMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    tx => setTransactionMessageFeePayerSigner(client.payer, tx),
+    tx => setTransactionMessageLifetimeUsingBlockhash(
+        client.svm.latestBlockhashLifetime(),
+        tx
+    ),
+    tx => appendTransactionMessageInstruction(transferIx, tx),
+);
+
+// Sign and send
+const signedTx = await signTransactionMessageWithSigners(transactionMessage);
+const result = client.svm.sendTransaction(signedTx);
+
+// Check for errors
+if ('err' in result && result.err()) {
+    console.error('Transaction failed:', result.err());
+}
+
+// Log results
+console.log('Transaction successful!');
+console.log('Compute units:', result.computeUnitsConsumed());
+
+// Check final balances
+const senderFinal = client.svm.getBalance(client.payer.address) ?? 0n;
+const recipientFinal = client.svm.getBalance(recipientAddress) ?? 0n;
+console.log('Sender final:', Number(senderFinal) / 1e9, 'SOL');
+console.log('Recipient final:', Number(recipientFinal) / 1e9, 'SOL');
+```
+
+## Expected Output
+
+```
+Sender initial: 10 SOL
+Transaction successful!
+Compute units: 150n
+Sender final: 8.999995 SOL
+Recipient final: 1 SOL
+```
+
+## Key Points
+
+1. **Client Setup**: Use `createEmptyClient().use(litesvm()).use(payer(mySigner))` (assumes you have a signer, `mySigner` defined)
+2. **Funding**: Use `client.svm.airdrop()` to fund accounts
+3. **Instructions**: Use `@solana-program/system` for system instructions
+4. **Transaction Building**: Use Kit's `pipe` pattern for building transactions
+5. **Blockhash**: Use `client.svm.latestBlockhashLifetime()` for transaction lifetime
+6. **Sending**: Use `client.svm.sendTransaction()` to execute
+7. **Results**: Result properties like `computeUnitsConsumed()` are getter functions
+
+<Callout type="info">
+  The sender's final balance is slightly less than 9 SOL due to transaction fees.
+</Callout>

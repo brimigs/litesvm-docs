@@ -1,0 +1,70 @@
+---
+title: Examples
+description: Complete TypeScript examples for LiteSVM
+---
+
+import { Card, Cards } from "fumadocs-ui/components/card";
+
+# TypeScript Examples
+
+Complete, runnable examples demonstrating LiteSVM usage with `@solana/kit`.
+
+<Cards>
+  <Card
+    title="SOL Transfer"
+    description="Build and send a SOL transfer transaction"
+    href="/docs/typescript/examples/sol-transfer"
+  />
+  <Card
+    title="Account Setup"
+    description="Set up test accounts and state"
+    href="/docs/typescript/examples/account-setup"
+  />
+  <Card
+    title="Program Testing"
+    description="Load and test custom programs"
+    href="/docs/typescript/examples/program-testing"
+  />
+  <Card
+    title="Time-Based Testing"
+    description="Test time-dependent logic"
+    href="/docs/typescript/examples/time-based"
+  />
+</Cards>
+
+## Running Examples
+
+All examples can be run with `tsx`:
+
+```bash
+# Install dependencies
+pnpm add @solana/kit @solana/kit-plugins @solana-program/system
+
+# Run an example
+npx tsx example.ts
+```
+
+## Example Repository
+
+Complete runnable examples are available in the kit-helpers repository:
+
+```bash
+git clone https://github.com/solana-foundation/kit-helpers
+cd examples/litesvm
+pnpm install
+pnpm demo:01  # Basic setup
+pnpm demo:02  # SOL transfer
+# ... etc
+```
+
+Available demos:
+- `demo:01` - Basic setup
+- `demo:02` - SOL transfer
+- `demo:03` - Account management
+- `demo:04` - Program deployment
+- `demo:05` - Transactions
+- `demo:06` - Clock manipulation
+- `demo:07` - Sysvars
+- `demo:08` - Builder methods
+- `demo:09` - Kit integration
+- `demo:10` - RPC compatibility
