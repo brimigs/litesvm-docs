@@ -138,7 +138,6 @@ const result = client.svm.sendTransaction(signedTx);
 
 if ('err' in result && result.err()) {
     console.error('Transaction failed:', result.err());
-    console.error('Logs:', result.logs());
 }
 
 console.log('Success!');

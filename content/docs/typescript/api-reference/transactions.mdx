@@ -152,6 +152,7 @@ const result = client.svm.sendTransaction(signedTx);
 ```typescript
 import {
     appendTransactionMessageInstruction,
+    createEmptyClient,
     createTransactionMessage,
     generateKeyPairSigner,
     lamports,
@@ -161,6 +162,7 @@ import {
     signTransactionMessageWithSigners,
 } from '@solana/kit';
 import { getTransferSolInstruction } from '@solana-program/system';
+import { litesvm } from "@solana/kit-plugins";
 
 // Setup
 const client = createEmptyClient().use(litesvm());

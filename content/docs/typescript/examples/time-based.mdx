@@ -50,11 +50,11 @@ Example pattern for testing time-locked functionality:
 
 ```typescript
 import { address, createEmptyClient, lamports } from '@solana/kit';
-import { litesvm, payer } from '@solana/kit-plugins';
+import { litesvm, payerFromFile } from '@solana/kit-plugins';
 
 const client = createEmptyClient()
     .use(litesvm())
-    .use(payer(mySigner));
+    .use(payerFromFile('path/to/keypair.json'));
 
 client.svm
     .withSigverify(false)
@@ -75,7 +75,8 @@ vaultData[0] = 0x01; // discriminator
 view.setBigUint64(1, unlockSlot, true); // unlock_slot
 view.setBigUint64(9, lockedAmount, true); // amount
 
-const programId = address('TimeLockedVault11111111111111111111111');
+const programId = address('TimeLockedVault11111111111111111111111'); // replace or generateKeyPairSigner()
+const vaultAddress = address('Vault111111111111111111111111111'); // replace or generateKeyPairSigner()
 const minBalance = client.svm.minimumBalanceForRentExemption(BigInt(vaultData.length));
 
 client.svm.setAccount({

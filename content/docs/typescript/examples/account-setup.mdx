@@ -26,6 +26,8 @@ console.log(`Minimum balance for ${dataSize} bytes:`, minBalance, 'lamports');
 const programId = address('11111111111111111111111111111111');
 const accountData = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
+const testAddress = address('REPLACE_WITH_TEST_ADDRESS'); // or use generateKeyPairSigner()
+
 client.svm.setAccount({
     address: testAddress,
     data: accountData,
@@ -64,6 +66,11 @@ const client = createEmptyClient().use(litesvm());
 const programId = address('11111111111111111111111111111111');
 
 // Set up multiple accounts with different data
+const account1 = address('Account111111111111111111111111111'); // replace or generateKeyPairSigner()
+const account2 = address('Account211111111111111111111111111'); // replace or generateKeyPairSigner()
+const account3 = address('Account311111111111111111111111111'); // replace or generateKeyPairSigner()
+const account4 = address('Account411111111111111111111111111'); // replace or generateKeyPairSigner()
+const account5 = address('Account511111111111111111111111111'); // replace or generateKeyPairSigner()
 const accounts = [account1, account2, account3, account4, account5];
 
 for (const [index, accountAddress] of accounts.entries()) {
@@ -105,8 +112,8 @@ import { litesvm } from '@solana/kit-plugins';
 const client = createEmptyClient().use(litesvm());
 
 // Your program ID
-const programId = address('YourProgramId111111111111111111111111111');
-const dataAccountAddress = address('DataAccount111111111111111111111111111');
+const programId = address('YourProgramId111111111111111111111111111'); // replace or generateKeyPairSigner()
+const dataAccountAddress = address('DataAccount111111111111111111111111111'); // replace or generateKeyPairSigner()
 
 // Serialize your account data structure
 // This example uses a simple layout: [u8 discriminator, u64 counter, pubkey owner]

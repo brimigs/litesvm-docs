@@ -13,6 +13,7 @@ Complete example of building and sending a SOL transfer transaction.
 
 ```typescript
 import {
+    address,
     appendTransactionMessageInstruction,
     createEmptyClient,
     createTransactionMessage,
@@ -22,13 +23,14 @@ import {
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
 } from '@solana/kit';
-import { litesvm, payer } from '@solana/kit-plugins';
+import { litesvm, payerFromFile } from '@solana/kit-plugins';
 import { getTransferSolInstruction } from '@solana-program/system';
 
 // Create client with LiteSVM and payer
+const recipientAddress = address('REPLACE_WITH_RECIPIENT_ADDRESS');
 const client = createEmptyClient()
     .use(litesvm())
-    .use(payer(mySigner));
+    .use(payerFromFile('path/to/keypair.json'));
 
 // Fund the payer
 client.svm.airdrop(client.payer.address, lamports(10_000_000_000n));
