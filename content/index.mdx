@@ -54,87 +54,113 @@ import Image from "next/image";
   <h2 className="text-2xl font-bold text-left mb-8 text-[#E8684A]">
     Installation
   </h2>
-  
-  <div className="flex flex-col gap-6">
-    <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold mb-1">Install LiteSVM Core Library</h3>
-          <p className="text-sm text-fd-muted-foreground">Essential testing framework</p>
-        </div>
-        <a
-          href="https://crates.io/crates/litesvm"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
-        >
-          📦 crates.io
-        </a>
-      </div>
-      ```bash
-      cargo add --dev litesvm
-      ```
-    </div>
 
-    <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold mb-1">Add LiteSVM Utils</h3>
-          <p className="text-sm text-fd-muted-foreground">Additional helper utilities</p>
+  <Tabs items={["Rust", "TypeScript"]}>
+    <Tab value="Rust">
+      <div className="flex flex-col gap-6">
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Install LiteSVM Core Library</h3>
+              <p className="text-sm text-fd-muted-foreground">Essential testing framework</p>
+            </div>
+            <a
+              href="https://crates.io/crates/litesvm"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              crates.io
+            </a>
+          </div>
+          ```bash
+          cargo add --dev litesvm
+          ```
         </div>
-        <a
-          href="https://crates.io/crates/litesvm-utils"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
-        >
-          📦 crates.io
-        </a>
-      </div>
-      ```bash
-      cargo add --dev litesvm-utils
-      ```
-    </div>
 
-    <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold mb-1">Add SPL Token Support</h3>
-          <p className="text-sm text-fd-muted-foreground">Token program utilities</p>
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Add LiteSVM Utils</h3>
+              <p className="text-sm text-fd-muted-foreground">Additional helper utilities</p>
+            </div>
+            <a
+              href="https://crates.io/crates/litesvm-utils"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              crates.io
+            </a>
+          </div>
+          ```bash
+          cargo add --dev litesvm-utils
+          ```
         </div>
-        <a
-          href="https://crates.io/crates/litesvm-token"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
-        >
-          📦 crates.io
-        </a>
-      </div>
-      ```bash
-      cargo add --dev litesvm-token
-      ```
-    </div>
 
-    <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold mb-1">Add Anchor Support</h3>
-          <p className="text-sm text-fd-muted-foreground">Testing utilities for Anchor programs</p>
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Add SPL Token Support</h3>
+              <p className="text-sm text-fd-muted-foreground">Token program utilities</p>
+            </div>
+            <a
+              href="https://crates.io/crates/litesvm-token"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              crates.io
+            </a>
+          </div>
+          ```bash
+          cargo add --dev litesvm-token
+          ```
         </div>
-        <a
-          href="https://crates.io/crates/anchor-litesvm"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
-        >
-          📦 crates.io
-        </a>
-      </div>
-      ```bash
-      cargo add --dev anchor-litesvm
-      ```
-    </div>
 
-  </div>
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Add Anchor Support</h3>
+              <p className="text-sm text-fd-muted-foreground">Testing utilities for Anchor programs</p>
+            </div>
+            <a
+              href="https://crates.io/crates/anchor-litesvm"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              crates.io
+            </a>
+          </div>
+          ```bash
+          cargo add --dev anchor-litesvm
+          ```
+        </div>
+      </div>
+    </Tab>
+    <Tab value="TypeScript">
+      <div className="flex flex-col gap-6">
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Install LiteSVM Kit Plugin</h3>
+              <p className="text-sm text-fd-muted-foreground">LiteSVM plugin for @solana/kit</p>
+            </div>
+            <a
+              href="https://www.npmjs.com/package/@solana/kit-plugin-litesvm"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              npm
+            </a>
+          </div>
+          ```bash
+          pnpm install @solana/kit-plugin-litesvm @solana/kit
+          ```
+        </div>
+      </div>
+    </Tab>
+  </Tabs>
 </div>

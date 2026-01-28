@@ -1,0 +1,10 @@
+{
+  "title": "TypeScript",
+  "pages": [
+    "index",
+    "getting-started",
+    "kit-integration",
+    "api-reference",
+    "examples"
+  ]
+}

@@ -1,0 +1,178 @@
+---
+title: Program Testing
+description: Load and test custom Solana programs with LiteSVM
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Program Testing Example
+
+Demonstrates loading custom programs and setting up test environments.
+
+## Loading a Program
+
+```typescript
+import { address, createEmptyClient } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugins';
+import * as fs from 'node:fs';
+
+const client = createEmptyClient().use(litesvm());
+
+// Configure for program testing
+client.svm
+    .withSigverify(false)
+    .withBlockhashCheck(false)
+    .withSysvars()
+    .withBuiltins();
+
+// Load program from .so file
+const programId = address('YourProgramId111111111111111111111111111');
+const soPath = '/path/to/target/deploy/my_program.so';
+
+if (fs.existsSync(soPath)) {
+    client.svm.addProgramFromFile(programId, soPath);
+    console.log('Program loaded:', programId);
+
+    // Verify program account
+    const programAccount = client.svm.getAccount(programId);
+    if (programAccount.exists) {
+        console.log('  Executable:', programAccount.executable);
+        console.log('  Data size:', programAccount.data.length, 'bytes');
+    }
+} else {
+    console.log('Program file not found:', soPath);
+    console.log('Build with: cargo build-sbf');
+}
+```
+
+## Complete Program Test Setup
+
+```typescript
+import {
+    address,
+    appendTransactionMessageInstruction,
+    createEmptyClient,
+    createTransactionMessage,
+    lamports,
+    pipe,
+    setTransactionMessageFeePayerSigner,
+    setTransactionMessageLifetimeUsingBlockhash,
+    signTransactionMessageWithSigners,
+    generateKeyPairSigner,
+} from '@solana/kit';
+import { litesvm, payer } from '@solana/kit-plugins';
+import * as fs from 'node:fs';
+
+const mySigner = await generateKeyPairSigner();
+const dataAccountAddress = address('DataAccount111111111111111111111111111');
+
+// Setup
+const client = createEmptyClient()
+    .use(litesvm())
+    .use(payer(mySigner));
+
+client.svm
+    .withSigverify(false)
+    .withBlockhashCheck(false)
+    .withSysvars()
+    .withBuiltins()
+    .withPrecompiles()
+    .withTransactionHistory(100n);
+
+// Load program
+const programId = address('YourProgramId111111111111111111111111111');
+const soPath = '/path/to/target/deploy/my_program.so';
+
+if (fs.existsSync(soPath)) {
+    client.svm.addProgramFromFile(programId, soPath);
+}
+
+// Fund payer
+client.svm.airdrop(client.payer.address, lamports(10_000_000_000n));
+
+// Set up any required data accounts
+const minBalance = client.svm.minimumBalanceForRentExemption(100n);
+client.svm.setAccount({
+    address: dataAccountAddress,
+    data: new Uint8Array(100),
+    executable: false,
+    lamports: lamports(minBalance),
+    programAddress: programId,
+    space: 100n,
+});
+
+// Build instruction (replace with your actual instruction)
+// Account roles: 0 = Readonly, 1 = Writable, 2 = ReadonlySigner, 3 = WritableSigner
+const instruction = {
+    programAddress: programId,
+    accounts: [
+        { address: client.payer.address, role: 3 },      // WritableSigner
+        { address: dataAccountAddress, role: 1 },        // Writable
+    ],
+    data: new Uint8Array([0x01, 0x02, 0x03]), // Your instruction data
+};
+
+// Build transaction
+const transactionMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    tx => setTransactionMessageFeePayerSigner(client.payer, tx),
+    tx => setTransactionMessageLifetimeUsingBlockhash(
+        client.svm.latestBlockhashLifetime(),
+        tx
+    ),
+    tx => appendTransactionMessageInstruction(instruction, tx),
+);
+
+const signedTx = await signTransactionMessageWithSigners(transactionMessage);
+
+// Simulate first
+console.log('Simulating...');
+const simResult = client.svm.simulateTransaction(signedTx);
+const simMeta = simResult.meta();
+console.log('  Compute units:', simMeta.computeUnitsConsumed());
+console.log('  Logs:', simMeta.logs());
+
+// Execute
+console.log('\nExecuting...');
+const result = client.svm.sendTransaction(signedTx);
+
+if ('err' in result && result.err()) {
+    console.error('Transaction failed:', result.err());
+}
+
+console.log('Success!');
+console.log('  Compute units:', result.computeUnitsConsumed());
+
+// Verify state changes
+const updatedAccount = client.svm.getAccount(dataAccountAddress);
+if (updatedAccount.exists) {
+    console.log('\nUpdated account data:', Array.from(updatedAccount.data.slice(0, 10)));
+}
+```
+
+## Using Default Programs
+
+For testing that requires standard programs:
+
+```typescript
+const client = createEmptyClient().use(litesvm());
+
+// Add all default programs (System, BPF Loader, etc.)
+client.svm.withDefaultPrograms();
+
+// Or add specific programs you need
+// The Token program, Associated Token program, etc. would need
+// to be added manually via addProgramFromFile if needed
+```
+
+<Callout type="info">
+  Build your Solana program with `cargo build-sbf` to generate the `.so` file.
+</Callout>
+
+## Key Points
+
+1. **Program Loading**: Use `addProgramFromFile` to load compiled programs
+2. **Configuration**: Enable sysvars, builtins, and precompiles as needed
+3. **Account Setup**: Pre-populate data accounts with `setAccount`
+4. **Simulation**: Test with `simulateTransaction` before executing
+5. **Verification**: Check account state after execution

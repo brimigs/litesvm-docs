@@ -3,12 +3,14 @@
   "pages": [
     "getting-started",
     "core-concepts",
+    "---Rust---",
     "testing-your-program",
     "examples",
     "api-reference",
-    "---Additional Crates---",
-    "testing-with-litesvm-utils",
-    "testing-with-spl-tokens",
-    "testing-with-anchor-litesvm"
+    "additional-crates",
+    "---TypeScript---",
+    "typescript/getting-started",
+    "typescript/api-reference",
+    "typescript/examples"
   ]
 }

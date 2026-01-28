@@ -1,0 +1,220 @@
+---
+title: Getting Started
+description: Use LiteSVM with @solana/kit for fast, in-process Solana testing
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+
+# LiteSVM for TypeScript
+
+LiteSVM provides TypeScript bindings through the `litesvm()` plugin in the `@solana/kit-plugins` package ([GitHub](https://github.com/anza-xyz/kit-plugins/tree/main/packages/kit-plugin-litesvm)), enabling fast, in-process Solana testing directly in your TypeScript/JavaScript projects.
+
+## Why Use LiteSVM in TypeScript?
+
+- **Speed**: No external processes or network calls - everything runs in memory
+- **Kit Integration**: Works seamlessly with `@solana/kit` transaction building
+- **RPC Compatibility**: Provides a subset of RPC methods that work with Kit patterns
+- **Full Control**: Direct access to account state, clock, and sysvars
+
+## Quick Start
+
+<Steps>
+
+<Step>
+### Install Dependencies
+
+<Tabs items={['pnpm', 'npm', 'yarn', 'bun']} groupId='package-manager'>
+<Tab value="pnpm">
+```bash
+pnpm add @solana/kit @solana/kit-plugins @solana-program/system
+```
+</Tab>
+<Tab value="npm">
+```bash
+npm install @solana/kit @solana/kit-plugins @solana-program/system
+```
+</Tab>
+<Tab value="yarn">
+```bash
+yarn add @solana/kit @solana/kit-plugins @solana-program/system
+```
+</Tab>
+<Tab value="bun">
+```bash
+bun add @solana/kit @solana/kit-plugins @solana-program/system
+```
+</Tab>
+</Tabs>
+
+</Step>
+
+<Step>
+### Create Your Client
+
+```typescript
+import { createEmptyClient, lamports } from '@solana/kit';
+import { litesvm, payer } from '@solana/kit-plugins';
+
+// Create a client with LiteSVM and your payer
+const client = createEmptyClient()
+    .use(litesvm())
+    .use(payer(mySigner));
+
+// Fund the payer
+client.svm.airdrop(client.payer.address, lamports(5_000_000_000n));
+
+// Check the balance
+const balance = client.svm.getBalance(client.payer.address);
+console.log('Balance:', balance, 'lamports');
+```
+
+<Callout type="success">
+  Everything is synchronous - no async/await needed for LiteSVM operations.
+</Callout>
+
+</Step>
+
+</Steps>
+
+## Understanding the Plugin
+
+The `litesvm()` plugin adds two properties to your client:
+
+| Property | Description |
+|----------|-------------|
+| `client.svm` | Direct LiteSVM instance for account management, transactions, and configuration |
+| `client.rpc` | Kit-compatible RPC interface (subset: `getAccountInfo`, `getMultipleAccounts`, `getLatestBlockhash`) |
+
+### Using client.svm
+
+Direct access to LiteSVM for:
+
+- Account management (`setAccount`, `getAccount`, `airdrop`)
+- Transaction execution (`sendTransaction`, `simulateTransaction`)
+- Configuration (`withSigverify`, `withBlockhashCheck`, etc.)
+- Time manipulation (`warpToSlot`, `getClock`)
+
+```typescript
+// Fund an account
+client.svm.airdrop(address, lamports(1_000_000_000n));
+
+// Set account state directly
+client.svm.setAccount({
+    address: myAddress,
+    data: new Uint8Array([1, 2, 3]),
+    executable: false,
+    lamports: lamports(1_000_000n),
+    programAddress: '11111111111111111111111111111111',
+    space: 3n,
+});
+
+// Get blockhash for transactions
+const blockhashLifetime = client.svm.latestBlockhashLifetime();
+```
+
+### Using client.rpc
+
+Kit-compatible RPC interface for standard operations:
+
+```typescript
+// Get account info (returns base64-encoded data)
+const { value: account } = await client.rpc.getAccountInfo(address).send();
+
+// Get multiple accounts in one call
+const { value: accounts } = await client.rpc
+    .getMultipleAccounts([addr1, addr2, addr3])
+    .send();
+
+// Get latest blockhash
+const { value: blockhash } = await client.rpc.getLatestBlockhash().send();
+```
+
+<Callout type="warning">
+  The RPC layer only supports **base64 encoding**. Requesting other encodings will throw an error.
+</Callout>
+
+## Configuration
+
+Configure LiteSVM using builder methods:
+
+```typescript
+const client = createEmptyClient()
+    .use(litesvm())
+    .use(payer(mySigner));
+
+// Configure for testing
+client.svm
+    .withSigverify(false)      // Skip signature verification
+    .withBlockhashCheck(false) // Skip blockhash validation
+    .withSysvars()             // Enable Clock, Rent, etc.
+    .withBuiltins()            // Enable ed25519, secp256k1
+    .withTransactionHistory(100n); // Store transaction history
+```
+
+## Building Transactions
+
+Use Kit's transaction building patterns with LiteSVM:
+
+```typescript
+import {
+    appendTransactionMessageInstruction,
+    createTransactionMessage,
+    lamports,
+    pipe,
+    setTransactionMessageFeePayerSigner,
+    setTransactionMessageLifetimeUsingBlockhash,
+    signTransactionMessageWithSigners,
+} from '@solana/kit';
+import { getTransferSolInstruction } from '@solana-program/system';
+
+// Build the transaction
+const transactionMessage = pipe(
+    createTransactionMessage({ version: 0 }),
+    tx => setTransactionMessageFeePayerSigner(client.payer, tx),
+    tx => setTransactionMessageLifetimeUsingBlockhash(
+        client.svm.latestBlockhashLifetime(),
+        tx
+    ),
+    tx => appendTransactionMessageInstruction(
+        getTransferSolInstruction({
+            source: client.payer,
+            destination: recipient,
+            amount: lamports(1_000_000_000n),
+        }),
+        tx
+    ),
+);
+
+// Sign and send
+const signedTx = await signTransactionMessageWithSigners(transactionMessage);
+const result = client.svm.sendTransaction(signedTx);
+```
+
+## SVM → RPC Flow
+
+You can set state via SVM and read it via RPC:
+
+```typescript
+import { address, lamports } from '@solana/kit';
+
+// Set account directly via SVM
+client.svm.setAccount({
+    address: myAddress,
+    data: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+    executable: false,
+    lamports: lamports(1_000_000n),
+    programAddress: address('11111111111111111111111111111111'),
+    space: 4n,
+});
+
+// Read via RPC (returns base64-encoded data)
+const { value } = await client.rpc.getAccountInfo(myAddress).send();
+console.log('Data:', value?.data); // ['3q2+7w==', 'base64']
+```
+
+## Next Steps
+
+- **[API Reference](/docs/typescript/api-reference)** - Explore the full API
+- **[Examples](/docs/typescript/examples)** - See complete code examples

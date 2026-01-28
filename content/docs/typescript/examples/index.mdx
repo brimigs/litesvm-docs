@@ -1,0 +1,45 @@
+---
+title: Examples
+description: Complete TypeScript examples for LiteSVM
+---
+
+import { Card, Cards } from "fumadocs-ui/components/card";
+
+# TypeScript Examples
+
+Complete, runnable examples demonstrating LiteSVM usage with `@solana/kit`.
+
+<Cards>
+  <Card
+    title="SOL Transfer"
+    description="Build and send a SOL transfer transaction"
+    href="/docs/typescript/examples/sol-transfer"
+  />
+  <Card
+    title="Account Setup"
+    description="Set up test accounts and state"
+    href="/docs/typescript/examples/account-setup"
+  />
+  <Card
+    title="Program Testing"
+    description="Load and test custom programs"
+    href="/docs/typescript/examples/program-testing"
+  />
+  <Card
+    title="Time-Based Testing"
+    description="Test time-dependent logic"
+    href="/docs/typescript/examples/time-based"
+  />
+</Cards>
+
+## Running Examples
+
+All examples can be run with `tsx` though some addresses/variables require replacing place holders with actual values.
+
+```bash
+# Install dependencies
+pnpm add @solana/kit @solana/kit-plugins @solana-program/system
+
+# Run an example
+npx tsx example.ts
+```
