@@ -39,10 +39,9 @@ Complete API documentation for using LiteSVM with `@solana/kit-plugins`.
 ### Plugin Setup
 
 ```typescript
-import { createEmptyClient } from '@solana/kit';
-import { litesvm } from '@solana/kit-plugins';
+import { createClient } from '@solana/kit-client-litesvm';
 
-const client = createEmptyClient().use(litesvm());
+const client = await createClient();
 // client.svm: LiteSVM instance
 // client.rpc: RPC compatibility layer
 ```

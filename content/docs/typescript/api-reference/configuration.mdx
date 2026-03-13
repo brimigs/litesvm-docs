@@ -12,7 +12,7 @@ LiteSVM uses a builder pattern for configuration. All methods return `LiteSVM` f
 ## Typical Test Setup
 
 ```typescript
-const client = createEmptyClient().use(litesvm());
+const client = await createClient();
 
 client.svm
     .withSigverify(false)        // Skip signature verification (faster)
