@@ -12,10 +12,9 @@ Demonstrates using `warpToSlot` to test time-dependent program logic.
 ## Basic Clock Manipulation
 
 ```typescript
-import { createEmptyClient } from '@solana/kit';
-import { litesvm } from '@solana/kit-plugins';
+import { createClient } from '@solana/kit-client-litesvm';
 
-const client = createEmptyClient().use(litesvm());
+const client = await createClient();
 
 // Enable sysvars for clock access
 client.svm.withSysvars();
@@ -49,12 +48,10 @@ console.log('  Epoch:', afterWarp2.epoch);
 Example pattern for testing time-locked functionality:
 
 ```typescript
-import { address, createEmptyClient, lamports } from '@solana/kit';
-import { litesvm, payerFromFile } from '@solana/kit-plugins';
+import { createClient } from '@solana/kit-client-litesvm';
+import { address, lamports } from '@solana/kit';
 
-const client = createEmptyClient()
-    .use(litesvm())
-    .use(payerFromFile('path/to/keypair.json'));
+const client = await createClient();
 
 client.svm
     .withSigverify(false)
@@ -120,40 +117,50 @@ if (updatedVault.exists) {
 }
 ```
 
-## Testing Epoch-Based Logic
+## Reading the Epoch Schedule
+
+You can read the epoch schedule to understand the slot/epoch relationship on the cluster:
 
 ```typescript
-import { createEmptyClient } from '@solana/kit';
-import { litesvm } from '@solana/kit-plugins';
+import { createClient } from '@solana/kit-client-litesvm';
 
-const client = createEmptyClient().use(litesvm());
+const client = await createClient();
 client.svm.withSysvars();
 
-// Get epoch schedule to understand slot/epoch relationship
 const epochSchedule = client.svm.getEpochSchedule();
 console.log('Slots per epoch:', epochSchedule.slotsPerEpoch);
-
-// Start in epoch 0
-let clock = client.svm.getClock();
-console.log('\nInitial - Slot:', clock.slot, 'Epoch:', clock.epoch);
-
-// Warp to epoch 1
-const epoch1Start = epochSchedule.slotsPerEpoch;
-client.svm.warpToSlot(epoch1Start);
-
-clock = client.svm.getClock();
-console.log('After warp - Slot:', clock.slot, 'Epoch:', clock.epoch);
-
-// Warp to epoch 5
-const epoch5Start = epochSchedule.slotsPerEpoch * 5n;
-client.svm.warpToSlot(epoch5Start);
-
-clock = client.svm.getClock();
-console.log('Epoch 5 - Slot:', clock.slot, 'Epoch:', clock.epoch);
-
-// Use this for testing epoch-based reward distribution,
-// staking logic, or any epoch-dependent functionality
+console.log('First normal epoch:', epochSchedule.firstNormalEpoch);
+console.log('First normal slot:', epochSchedule.firstNormalSlot);
 ```
+
+<Callout type="warning">
+  `warpToSlot` advances the clock's `slot` field but does **not** automatically update `epoch` or `unixTimestamp`. Use `setClock` for full control over clock fields.
+</Callout>
+
+## Manual Clock Manipulation
+
+When your program reads `epoch` or `unix_timestamp` from the Clock sysvar, use `setClock` to set those fields directly:
+
+```typescript
+import { createClient } from '@solana/kit-client-litesvm';
+
+const client = await createClient();
+client.svm.withSysvars();
+
+// Get clock, mutate, write back
+const clock = client.svm.getClock();
+clock.slot = 50000n;
+clock.epoch = 5n;
+clock.unixTimestamp = 1700000000n;
+client.svm.setClock(clock);
+
+const after = client.svm.getClock();
+console.log('Slot:', after.slot);           // 50000n
+console.log('Epoch:', after.epoch);         // 5n
+console.log('Timestamp:', after.unixTimestamp); // 1700000000n
+```
+
+This mirrors the Rust `set_sysvar(&clock)` pattern. Use `warpToSlot` for simple slot advancement, `setClock` when you need epoch or timestamp control.
 
 ## Use Cases
 
@@ -163,8 +170,8 @@ Time manipulation is useful for testing:
 |----------|----------|
 | Token vesting | Warp past vesting cliff/milestones |
 | Auction endings | Warp past auction end slot |
-| Staking rewards | Warp through multiple epochs |
-| Time-locked withdrawals | Warp past unlock time |
+| Staking rewards | Use `setClock` to set epoch |
+| Time-locked withdrawals | Warp past unlock slot |
 | Rate limiting | Warp between allowed intervals |
 | Expiring orders | Warp past order expiration |
 
@@ -175,7 +182,7 @@ Time manipulation is useful for testing:
 ## Key Points
 
 1. **Enable Sysvars**: Call `withSysvars()` before using clock methods
-2. **Warp Forward**: Use `warpToSlot(slot)` to advance time
-3. **Read Clock**: Use `getClock()` to get current slot, epoch, timestamp
-4. **Epoch Schedule**: Use `getEpochSchedule()` to understand slot/epoch mapping
+2. **Warp Forward**: Use `warpToSlot(slot)` to advance the slot
+3. **Full Control**: Use `setClock` when you need to set `epoch`, `unixTimestamp`, or other clock fields
+4. **Read Clock**: Use `getClock()` to read current slot, epoch, timestamp
 5. **Test Pattern**: Test before and after time boundaries

@@ -10,6 +10,7 @@
     "additional-crates",
     "---TypeScript---",
     "typescript/getting-started",
+    "typescript/tokens",
     "typescript/api-reference",
     "typescript/examples"
   ]

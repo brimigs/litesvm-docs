@@ -55,6 +55,26 @@ console.log('Epoch start timestamp:', clock.epochStartTimestamp);
 console.log('Leader schedule epoch:', clock.leaderScheduleEpoch);
 ```
 
+### setClock
+
+```typescript
+setClock(clock: Clock): LiteSVM
+```
+
+Overwrite the clock sysvar. Get the clock, mutate its fields, then write it back. Use this when you need precise control over multiple clock fields — for example, setting the epoch or unix timestamp, which `warpToSlot` does not update.
+
+```typescript
+const clock = client.svm.getClock();
+clock.slot = 1000n;
+clock.epoch = 10n;
+clock.unixTimestamp = 1735689600n;
+client.svm.setClock(clock);
+```
+
+<Callout type="info">
+  `warpToSlot` only updates `slot`. Use `setClock` when your program reads `epoch` or `unix_timestamp` from the Clock sysvar.
+</Callout>
+
 ### Clock Properties
 
 | Property | Type | Description |
@@ -212,7 +232,7 @@ Use `warpToSlot` to test time-dependent program behavior:
 
 ```typescript
 async function testTimeLockedVault() {
-    const client = createEmptyClient().use(litesvm());
+    const client = await createClient();
     client.svm.withSysvars();
 
     const unlockSlot = 10000n;
