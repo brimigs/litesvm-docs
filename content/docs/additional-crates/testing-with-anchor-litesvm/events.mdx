@@ -48,13 +48,13 @@ pub struct InitializeEvent {
 
 ```rust
 use anchor_litesvm::{AnchorLiteSVM, EventHelpers};
-use solana_sdk::{native_token::LAMPORTS_PER_SOL, signature::Signer};
+use solana_signer::Signer;
 
 #[test]
 fn test_parse_events() {
     let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
 
-    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
 
     // Execute instruction that emits events
     let ix = ctx.program()
@@ -102,7 +102,7 @@ use anchor_litesvm::{AnchorLiteSVM, EventHelpers};
 fn test_assert_event_emitted() {
     let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
 
-    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
 
     let ix = ctx.program()
         .accounts(Initialize { /* ... */ })
@@ -211,112 +211,83 @@ match result.parse_event::<TransferEvent>() {
 Here's a comprehensive example demonstrating event handling:
 
 ```rust
-use anchor_litesvm::{AnchorLiteSVM, EventHelpers};
-use anchor_lang::prelude::*;
-use solana_sdk::{
-    native_token::LAMPORTS_PER_SOL,
-    signature::Signer,
-    pubkey::Pubkey,
-};
+use anchor_litesvm::{AnchorLiteSVM, EventHelpers, TestHelpers};
+use anchor_lang::{prelude::*, system_program};
+use solana_signer::Signer;
 
-declare_id!("YourProgram11111111111111111111111111111111");
-
-// Events
-#[event]
-pub struct VaultCreated {
-    pub vault: Pubkey,
-    pub authority: Pubkey,
-    pub timestamp: i64,
-}
-
-#[event]
-pub struct Deposit {
-    pub vault: Pubkey,
-    pub depositor: Pubkey,
-    pub amount: u64,
-}
-
-#[event]
-pub struct Withdrawal {
-    pub vault: Pubkey,
-    pub recipient: Pubkey,
-    pub amount: u64,
-}
+// declare_program! generates client types AND re-exports event structs
+anchor_lang::declare_program!(vault);
 
 #[test]
 fn test_vault_events() {
     let mut ctx = AnchorLiteSVM::build_with_program(
-        id(),
+        VAULT_PROGRAM_ID,
         include_bytes!("../target/deploy/vault.so"),
     );
 
-    let authority = ctx.create_funded_account(100 * LAMPORTS_PER_SOL);
-    let depositor = ctx.create_funded_account(50 * LAMPORTS_PER_SOL);
+    let authority = ctx.svm.create_funded_account(100_000_000_000).unwrap();
+    let depositor = ctx.svm.create_funded_account(50_000_000_000).unwrap();
 
-    let (vault_pda, _) = Pubkey::find_program_address(
+    let vault_pda = ctx.svm.get_pda(
         &[b"vault", authority.pubkey().as_ref()],
-        &id(),
+        &VAULT_PROGRAM_ID,
     );
 
     // Create vault
     let create_ix = ctx.program()
-        .accounts(CreateVault {
+        .accounts(vault::client::accounts::CreateVault {
             authority: authority.pubkey(),
             vault: vault_pda,
-            system_program: solana_sdk::system_program::id(),
+            system_program: system_program::ID,
         })
-        .args(instruction::CreateVault {})
+        .args(vault::client::args::CreateVault {})
         .instruction()
         .unwrap();
 
     let result = ctx.execute_instruction(create_ix, &[&authority]).unwrap();
 
     // Assert VaultCreated event
-    result.assert_event_emitted::<VaultCreated>();
-    let created_event: VaultCreated = result.parse_event().unwrap();
+    result.assert_event_emitted::<vault::VaultCreated>();
+    let created_event: vault::VaultCreated = result.parse_event().unwrap();
     assert_eq!(created_event.vault, vault_pda);
     assert_eq!(created_event.authority, authority.pubkey());
 
     // Deposit
     let deposit_ix = ctx.program()
-        .accounts(DepositToVault {
+        .accounts(vault::client::accounts::DepositToVault {
             vault: vault_pda,
             depositor: depositor.pubkey(),
-            system_program: solana_sdk::system_program::id(),
+            system_program: system_program::ID,
         })
-        .args(instruction::Deposit { amount: 10 * LAMPORTS_PER_SOL })
+        .args(vault::client::args::Deposit { amount: 10_000_000_000 })
         .instruction()
         .unwrap();
 
     let result = ctx.execute_instruction(deposit_ix, &[&depositor]).unwrap();
 
     // Assert Deposit event
-    result.assert_event_emitted::<Deposit>();
-    let deposit_event: Deposit = result.parse_event().unwrap();
-    assert_eq!(deposit_event.amount, 10 * LAMPORTS_PER_SOL);
+    result.assert_event_emitted::<vault::Deposit>();
+    let deposit_event: vault::Deposit = result.parse_event().unwrap();
+    assert_eq!(deposit_event.amount, 10_000_000_000);
     assert_eq!(deposit_event.depositor, depositor.pubkey());
-
-    // Multiple deposits
-    ctx.execute_instruction(deposit_ix.clone(), &[&depositor]).unwrap();
-    ctx.execute_instruction(deposit_ix.clone(), &[&depositor]).unwrap();
 
     // Withdrawal
     let withdraw_ix = ctx.program()
-        .accounts(WithdrawFromVault {
+        .accounts(vault::client::accounts::WithdrawFromVault {
             vault: vault_pda,
             authority: authority.pubkey(),
             recipient: authority.pubkey(),
         })
-        .args(instruction::Withdraw { amount: 5 * LAMPORTS_PER_SOL })
+        .args(vault::client::args::Withdraw { amount: 5_000_000_000 })
         .instruction()
         .unwrap();
 
     let result = ctx.execute_instruction(withdraw_ix, &[&authority]).unwrap();
 
     // Check withdrawal event
-    assert!(result.has_event::<Withdrawal>());
-    let withdraw_event: Withdrawal = result.parse_event().unwrap();
-    assert_eq!(withdraw_event.amount, 5 * LAMPORTS_PER_SOL);
+    assert!(result.has_event::<vault::Withdrawal>());
+    let withdraw_event: vault::Withdrawal = result.parse_event().unwrap();
+    assert_eq!(withdraw_event.amount, 5_000_000_000);
 
     println!("All event tests passed!");
 }

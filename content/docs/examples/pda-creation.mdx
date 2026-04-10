@@ -9,10 +9,8 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 ```rust title="tests/pda_test.rs"
 use litesvm::LiteSVM;
-use solana_sdk::{
-    account::Account,
-    pubkey::Pubkey,
-};
+use solana_account::Account;
+use solana_sdk::pubkey::Pubkey;
 
 #[test]
 fn test_pda_creation() {

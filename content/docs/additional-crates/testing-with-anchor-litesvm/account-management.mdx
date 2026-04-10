@@ -29,7 +29,8 @@ The `anchor-litesvm` account utilities handle this discriminator automatically.
 ```rust
 use anchor_litesvm::AnchorLiteSVM;
 use anchor_lang::prelude::*;
-use solana_sdk::{native_token::LAMPORTS_PER_SOL, signature::Signer, pubkey::Pubkey};
+use solana_signer::Signer;
+use solana_program::pubkey::Pubkey;
 
 #[account]
 pub struct UserAccount {
@@ -42,7 +43,7 @@ pub struct UserAccount {
 fn test_fetch_account() {
     let mut ctx = AnchorLiteSVM::build_with_program(PROGRAM_ID, include_bytes!("../target/deploy/your_program.so"));
 
-    let user = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let user = ctx.create_funded_account(10_000_000_000).unwrap();
 
     // ... initialize the account ...
 
@@ -215,47 +216,12 @@ Here's a comprehensive example demonstrating account management:
 
 ```rust
 use anchor_litesvm::AnchorLiteSVM;
+use anchor_litesvm::TestHelpers;
 use anchor_lang::prelude::*;
-use solana_sdk::{
-    native_token::LAMPORTS_PER_SOL,
-    signature::Signer,
-    pubkey::Pubkey,
-};
+use solana_signer::Signer;
+use solana_program::pubkey::Pubkey;
 
-declare_id!("YourProgram11111111111111111111111111111111");
-
-#[account]
-pub struct Counter {
-    pub count: u64,
-    pub authority: Pubkey,
-    pub bump: u8,
-}
-
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(mut)]
-    pub authority: Signer<'info>,
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + 8 + 32 + 1,
-        seeds = [b"counter", authority.key().as_ref()],
-        bump
-    )]
-    pub counter: Account<'info, Counter>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct Increment<'info> {
-    pub authority: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [b"counter", authority.key().as_ref()],
-        bump = counter.bump
-    )]
-    pub counter: Account<'info, Counter>,
-}
+anchor_lang::declare_program!(counter);
 
 #[test]
 fn test_counter_workflow() {
@@ -264,7 +230,7 @@ fn test_counter_workflow() {
         include_bytes!("../target/deploy/counter.so"),
     );
 
-    let authority = ctx.create_funded_account(10 * LAMPORTS_PER_SOL);
+    let authority = ctx.svm.create_funded_account(10_000_000_000).unwrap();
 
     // Derive the counter PDA
     let (counter_pda, bump) = Pubkey::find_program_address(
@@ -275,14 +241,14 @@ fn test_counter_workflow() {
     // Verify counter doesn't exist yet
     assert!(!ctx.account_exists(&counter_pda));
 
-    // Initialize
+    // Initialize using generated client types
     let init_ix = ctx.program()
-        .accounts(Initialize {
+        .accounts(counter::client::accounts::Initialize {
             authority: authority.pubkey(),
             counter: counter_pda,
-            system_program: solana_sdk::system_program::id(),
+            system_program: anchor_lang::system_program::ID,
         })
-        .args(instruction::Initialize {})
+        .args(counter::client::args::Initialize {})
         .instruction()
         .unwrap();
 
@@ -290,31 +256,31 @@ fn test_counter_workflow() {
 
     // Verify counter exists and has correct initial state
     assert!(ctx.account_exists(&counter_pda));
-    let counter: Counter = ctx.get_account(&counter_pda).unwrap();
+    let counter: counter::Counter = ctx.get_account(&counter_pda).unwrap();
     assert_eq!(counter.count, 0);
     assert_eq!(counter.authority, authority.pubkey());
     assert_eq!(counter.bump, bump);
 
-    // Increment
+    // Increment using generated client types
     let increment_ix = ctx.program()
-        .accounts(Increment {
+        .accounts(counter::client::accounts::Increment {
             authority: authority.pubkey(),
             counter: counter_pda,
         })
-        .args(instruction::Increment {})
+        .args(counter::client::args::Increment {})
         .instruction()
         .unwrap();
 
     ctx.execute_instruction(increment_ix, &[&authority]).unwrap();
 
     // Verify incremented
-    let counter: Counter = ctx.get_account(&counter_pda).unwrap();
+    let counter: counter::Counter = ctx.get_account(&counter_pda).unwrap();
     assert_eq!(counter.count, 1);
 
     // Increment again
     ctx.execute_instruction(increment_ix.clone(), &[&authority]).unwrap();
 
-    let counter: Counter = ctx.get_account(&counter_pda).unwrap();
+    let counter: counter::Counter = ctx.get_account(&counter_pda).unwrap();
     assert_eq!(counter.count, 2);
 
     println!("Counter test passed! Final count: {}", counter.count);

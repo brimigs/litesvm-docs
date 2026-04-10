@@ -25,6 +25,7 @@ match svm.send_transaction(tx) {
     Ok(meta) => {
         println!("Success! Signature: {}", meta.signature);
         println!("Compute units: {}", meta.compute_units_consumed);
+        println!("Fee: {} lamports", meta.fee);
     }
     Err(e) => {
         println!("Failed: {:?}", e.err);
@@ -135,9 +136,10 @@ assert_eq!(svm.get_balance(&pubkey).unwrap_or(0), balance_before);
 pub struct TransactionMetadata {
     pub signature: Signature,
     pub logs: Vec<String>,
+    pub inner_instructions: InnerInstructionsList,
     pub compute_units_consumed: u64,
     pub return_data: TransactionReturnData,
-    pub inner_instructions: InnerInstructionsList,
+    pub fee: u64,
 }
 ```
 
@@ -166,13 +168,18 @@ if let Some(data) = result.return_data.data {
 for inner in &result.inner_instructions {
     println!("CPI: {:?}", inner);
 }
+
+// Transaction fee paid by fee payer
+println!("Fee paid: {} lamports", result.fee);
 ```
 
 ## get_transaction
 
 ```rust
-pub fn get_transaction(&self, signature: &Signature) -> Option<Result<TransactionMetadata, FailedTransactionMetadata>>
+pub fn get_transaction(&self, signature: &Signature) -> Option<&TransactionResult>
 ```
+
+Where `TransactionResult = Result<TransactionMetadata, FailedTransactionMetadata>`.
 
 Query transaction from history. Requires `with_transaction_history()` to be set.
 

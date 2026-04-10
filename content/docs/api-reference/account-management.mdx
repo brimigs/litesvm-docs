@@ -8,7 +8,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 ## airdrop
 
 ```rust
-pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) -> TransactionResult
+pub fn airdrop(&mut self, address: &Address, lamports: u64) -> TransactionResult
 ```
 
 Where `TransactionResult` is `Result<TransactionMetadata, FailedTransactionMetadata>`.
@@ -36,7 +36,7 @@ match svm.airdrop(&keypair.pubkey(), 10_000_000_000) {
 ## get_account
 
 ```rust
-pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account>
+pub fn get_account(&self, address: &Address) -> Option<Account>
 ```
 
 Retrieve account data.
@@ -51,13 +51,13 @@ println!("Data length: {}", account.data.len());
 ## set_account
 
 ```rust
-pub fn set_account(&mut self, pubkey: Pubkey, account: Account) -> Result<(), LiteSVMError>
+pub fn set_account(&mut self, address: Address, account: Account) -> Result<(), LiteSVMError>
 ```
 
 Directly set account state.
 
 ```rust
-use solana_sdk::account::Account;
+use solana_account::Account;
 
 svm.set_account(pubkey, Account {
     lamports: 1_000_000,
@@ -71,7 +71,7 @@ svm.set_account(pubkey, Account {
 ## get_balance
 
 ```rust
-pub fn get_balance(&self, pubkey: &Pubkey) -> Option<u64>
+pub fn get_balance(&self, address: &Address) -> Option<u64>
 ```
 
 Get account lamport balance. Returns `None` if account doesn't exist.
@@ -100,6 +100,8 @@ Calculate minimum lamports needed for rent exemption.
 ```rust
 let data_len = 100;
 let min_balance = svm.minimum_balance_for_rent_exemption(data_len);
+
+use solana_account::Account;
 
 svm.set_account(pubkey, Account {
     lamports: min_balance,

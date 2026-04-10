@@ -16,7 +16,7 @@ pub fn with_compute_budget(self, compute_budget: ComputeBudget) -> Self
 Set compute unit limits and heap size.
 
 ```rust
-use solana_sdk::compute_budget::ComputeBudget;
+use solana_compute_budget::compute_budget::ComputeBudget;
 
 let mut svm = LiteSVM::default()
     .with_compute_budget(ComputeBudget {
@@ -128,17 +128,16 @@ let mut svm = LiteSVM::default()
 ## with_feature_set
 
 ```rust
-pub fn with_feature_set(self, feature_set: Arc<FeatureSet>) -> Self
+pub fn with_feature_set(self, feature_set: FeatureSet) -> Self
 ```
 
 Configure Solana feature set for testing specific runtime features.
 
 ```rust
-use solana_sdk::feature_set::FeatureSet;
-use std::sync::Arc;
+use agave_feature_set::FeatureSet;
 
 let mut svm = LiteSVM::default()
-    .with_feature_set(Arc::new(FeatureSet::all_enabled()));
+    .with_feature_set(FeatureSet::all_enabled());
 ```
 
 ## with_precompiles
@@ -159,6 +158,86 @@ let mut svm = LiteSVM::default()
   Requires the `precompiles` feature flag:
   ```toml
   [dev-dependencies]
-  litesvm = { version = "0.8", features = ["precompiles"] }
+  litesvm = { version = "0.11", features = ["precompiles"] }
   ```
 </Callout>
+
+## with_feature_accounts
+
+```rust
+pub fn with_feature_accounts(self) -> Self
+```
+
+Include feature gate accounts in the test environment. This ensures feature-gated Solana runtime behavior is accurately reflected in your tests.
+
+```rust
+let mut svm = LiteSVM::default()
+    .with_feature_accounts();
+```
+
+## register-tracing feature
+
+The `register-tracing` feature enables detailed SBF register tracing during transaction execution. It implies the `invocation-inspect-callback` feature.
+
+```toml
+[dev-dependencies]
+litesvm = { version = "0.11", features = ["register-tracing"] }
+```
+
+Use `LiteSVM::new_debuggable(true)` to create an instance with register tracing enabled:
+
+```rust
+#[cfg(feature = "register-tracing")]
+let mut svm = LiteSVM::new_debuggable(true);
+```
+
+When enabled, set the `SBF_TRACE_DISASSEMBLE` environment variable to also dump disassembly output alongside register traces:
+
+```bash
+SBF_TRACE_DISASSEMBLE=1 cargo test
+```
+
+## set_invocation_inspect_callback
+
+```rust
+pub fn set_invocation_inspect_callback<C: InvocationInspectCallback + 'static>(&mut self, callback: C)
+```
+
+Register a callback that fires before and after each program invocation. Requires the `invocation-inspect-callback` feature.
+
+```toml
+[dev-dependencies]
+litesvm = { version = "0.11", features = ["invocation-inspect-callback"] }
+```
+
+```rust
+use litesvm::{LiteSVM, types::InvocationInspectCallback};
+use solana_svm::invoke_context::InvokeContext;
+use solana_svm_transaction::svm_message::SVMMessage;
+
+struct MyInspector;
+
+impl InvocationInspectCallback for MyInspector {
+    fn before_invocation(
+        &self,
+        _svm: &LiteSVM,
+        _tx: &impl SVMMessage,
+        _program_indices: &[u16],
+        _invoke_context: &InvokeContext,
+    ) {
+        println!("Before program invocation");
+    }
+
+    fn after_invocation(
+        &self,
+        _svm: &LiteSVM,
+        _invoke_context: &InvokeContext,
+        _enable_register_tracing: bool,
+    ) {
+        println!("After program invocation");
+    }
+}
+
+let mut svm = LiteSVM::new();
+svm.set_invocation_inspect_callback(MyInspector);
+```
