@@ -12,12 +12,17 @@ Testing a custom Solana program means loading its compiled `.so` file into the S
 ## Loading a Program
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, address, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 import { myProgramPlugin } from '@my-program/sdk';
-import { address } from '@solana/kit';
 import * as fs from 'node:fs';
 
-const client = (await createClient().use(myProgramPlugin()));
+const mySigner = await generateKeyPairSigner();
+const client = createClient()
+    .use(signer(mySigner))
+    .use(litesvm())
+    .use(myProgramPlugin());
 
 // Configure for program testing
 client.svm
@@ -49,12 +54,17 @@ if (fs.existsSync(soPath)) {
 ## Complete Program Test Setup
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, address, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 import { myProgramPlugin } from '@my-program/sdk';
-import { address, lamports } from '@solana/kit';
 import * as fs from 'node:fs';
 
-const client = (await createClient().use(myProgramPlugin()));
+const mySigner = await generateKeyPairSigner();
+const client = createClient()
+    .use(signer(mySigner))
+    .use(litesvm())
+    .use(myProgramPlugin());
 
 client.svm
     .withSigverify(false)
@@ -97,7 +107,8 @@ const updatedAccount = client.myProgram.myAccount.fetch(dataAccountAddress);
 For testing that requires standard programs:
 
 ```typescript
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 // Add all default programs (System, BPF Loader, etc.)
 client.svm.withDefaultPrograms();

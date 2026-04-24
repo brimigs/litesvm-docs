@@ -12,7 +12,12 @@ LiteSVM uses a builder pattern for configuration. All methods return `LiteSVM` f
 ## Typical Test Setup
 
 ```typescript
-const client = await createClient();
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
+
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 client.svm
     .withSigverify(false)        // Skip signature verification (faster)
@@ -179,23 +184,3 @@ withFeatureSet(featureSet: FeatureSet): LiteSVM
 
 Configure the feature set for testing specific Solana versions.
 
-## Helper Methods
-
-### tap
-
-```typescript
-tap(fn: (svm: LiteSVM) => void): LiteSVM
-```
-
-Execute a function inline while chaining.
-
-```typescript
-client.svm
-    .withSysvars()
-    .tap(svm => {
-        // Do setup inside the chain
-        svm.airdrop(account.address, lamports(5_000_000_000n));
-        console.log('Account funded');
-    })
-    .withTransactionHistory(100n);
-```

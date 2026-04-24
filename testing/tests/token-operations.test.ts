@@ -1,17 +1,20 @@
 import { describe, test, expect } from 'bun:test';
-import { createClient } from '@solana/kit-client-litesvm';
-import { generateKeyPairSigner, lamports } from '@solana/kit';
+import { createClient, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 import { findAssociatedTokenPda, tokenProgram, TOKEN_PROGRAM_ADDRESS } from '@solana-program/token';
+import { createLitesvmClient } from './_helpers';
 
 describe('Token Operations', () => {
     test('create mint, mint to ATA, transfer, and verify balances', async () => {
-        const client = (await createClient()).use(tokenProgram());
+        const client = (await createLitesvmClient()).use(tokenProgram());
 
         const mintAuthority = await generateKeyPairSigner();
         const newMint = await generateKeyPairSigner();
         const recipient = await generateKeyPairSigner();
 
-        // Create a mint
+        client.svm.airdrop(client.payer.address, lamports(10_000_000_000n));
+
         await client.token.instructions
             .createMint({
                 newMint,
@@ -20,12 +23,10 @@ describe('Token Operations', () => {
             })
             .sendTransaction();
 
-        // Verify mint account
         const mintAccount = await client.token.accounts.mint.fetch(newMint.address);
         expect(mintAccount.data.decimals).toBe(9);
         expect(mintAccount.data.supply).toBe(0n);
 
-        // Mint tokens to payer's ATA
         await client.token.instructions
             .mintToATA({
                 mint: newMint.address,
@@ -36,7 +37,6 @@ describe('Token Operations', () => {
             })
             .sendTransaction();
 
-        // Derive payer's ATA and verify balance
         const [payerAta] = await findAssociatedTokenPda({
             owner: client.payer.address,
             mint: newMint.address,
@@ -47,7 +47,6 @@ describe('Token Operations', () => {
         expect(payerTokenAccount.data.mint).toBe(newMint.address);
         expect(payerTokenAccount.data.owner).toBe(client.payer.address);
 
-        // Transfer tokens to recipient's ATA
         await client.token.instructions
             .transferToATA({
                 mint: newMint.address,
@@ -58,7 +57,6 @@ describe('Token Operations', () => {
             })
             .sendTransaction();
 
-        // Derive recipient's ATA and verify balance
         const [recipientAta] = await findAssociatedTokenPda({
             owner: recipient.address,
             mint: newMint.address,
@@ -68,20 +66,20 @@ describe('Token Operations', () => {
         expect(recipientTokenAccount.data.amount).toBe(400_000_000n);
         expect(recipientTokenAccount.data.owner).toBe(recipient.address);
 
-        // Verify payer balance decreased
         const payerAfter = await client.token.accounts.token.fetch(payerAta);
         expect(payerAfter.data.amount).toBe(600_000_000n);
 
-        // Verify mint supply updated
         const mintAfter = await client.token.accounts.mint.fetch(newMint.address);
         expect(mintAfter.data.supply).toBe(1_000_000_000n);
     });
 
     test('create mint with custom payer', async () => {
         const customPayer = await generateKeyPairSigner();
-        const client = (await createClient({ payer: customPayer })).use(tokenProgram());
+        const client = createClient()
+            .use(signer(customPayer))
+            .use(litesvm())
+            .use(tokenProgram());
 
-        // Airdrop to custom payer
         client.svm.airdrop(customPayer.address, lamports(10_000_000_000n));
 
         const newMint = await generateKeyPairSigner();
@@ -94,7 +92,6 @@ describe('Token Operations', () => {
             })
             .sendTransaction();
 
-        // Verify the mint was created with correct decimals
         const mintAccount = await client.token.accounts.mint.fetch(newMint.address);
         expect(mintAccount.data.decimals).toBe(6);
     });

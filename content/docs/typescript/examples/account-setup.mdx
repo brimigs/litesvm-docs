@@ -12,10 +12,12 @@ Demonstrates setting up test account state directly without transactions.
 ## Basic Account Setup
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
-import { address, lamports } from '@solana/kit';
+import { createClient, address, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 // Calculate minimum balance for rent exemption
 const dataSize = 100n;
@@ -59,10 +61,12 @@ console.log('Balance:', balance, 'lamports');
 ## Setting Up Multiple Accounts
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
-import { address, lamports } from '@solana/kit';
+import { createClient, address, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 const programId = address('11111111111111111111111111111111');
 
 // Set up multiple accounts with different data
@@ -106,10 +110,12 @@ rpcAccounts.forEach((acc, i) => {
 Set up a program-owned data account:
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
-import { address, lamports } from '@solana/kit';
+import { createClient, address, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 // Your program ID
 const programId = address('YourProgramId111111111111111111111111111'); // replace or generateKeyPairSigner()

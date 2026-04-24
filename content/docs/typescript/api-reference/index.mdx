@@ -7,7 +7,7 @@ import { Card, Cards } from "fumadocs-ui/components/card";
 
 # TypeScript API Reference
 
-Complete API documentation for using LiteSVM with `@solana/kit-plugins`.
+Complete API documentation for using LiteSVM with `@solana/kit` and its plugin ecosystem.
 
 ## API Sections
 
@@ -39,9 +39,12 @@ Complete API documentation for using LiteSVM with `@solana/kit-plugins`.
 ### Plugin Setup
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 // client.svm: LiteSVM instance
 // client.rpc: RPC compatibility layer
 ```
@@ -70,7 +73,6 @@ const client = await createClient();
 | `sendTransaction(tx)` | Execute a transaction |
 | `simulateTransaction(tx)` | Simulate without state changes |
 | `latestBlockhash()` | Get current blockhash |
-| `latestBlockhashLifetime()` | Get blockhash with lifetime |
 | `expireBlockhash()` | Advance to new blockhash |
 
 ### Configuration (client.svm)

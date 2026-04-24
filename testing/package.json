@@ -10,9 +10,10 @@
     "@types/bun": "latest"
   },
   "dependencies": {
-    "@solana/kit": "latest",
-    "@solana/kit-client-litesvm": "latest",
-    "@solana-program/system": "latest",
-    "@solana-program/token": "latest"
+    "@solana/kit": "6.8.0",
+    "@solana/kit-plugin-litesvm": "0.10.0",
+    "@solana/kit-plugin-signer": "0.10.0",
+    "@solana-program/system": "0.12.0",
+    "@solana-program/token": "0.13.0"
   }
 }

@@ -231,8 +231,13 @@ const stakeHistory = client.svm.getStakeHistory();
 Use `warpToSlot` to test time-dependent program behavior:
 
 ```typescript
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
+
 async function testTimeLockedVault() {
-    const client = await createClient();
+    const mySigner = await generateKeyPairSigner();
+    const client = createClient().use(signer(mySigner)).use(litesvm());
     client.svm.withSysvars();
 
     const unlockSlot = 10000n;

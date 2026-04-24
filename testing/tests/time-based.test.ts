@@ -1,31 +1,28 @@
 import { describe, test, expect } from 'bun:test';
-import { createClient } from '@solana/kit-client-litesvm';
 import { generateKeyPairSigner, lamports } from '@solana/kit';
+import { createLitesvmClient } from './_helpers';
 
 describe('Time-Based Testing', () => {
     test('basic clock manipulation with warpToSlot', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const initialClock = client.svm.getClock();
         expect(initialClock.slot).toBe(0n);
 
-        // Warp to slot 1000
         client.svm.warpToSlot(1000n);
         const afterWarp = client.svm.getClock();
         expect(afterWarp.slot).toBe(1000n);
 
-        // Warp further
         client.svm.warpToSlot(100000n);
         const afterWarp2 = client.svm.getClock();
         expect(afterWarp2.slot).toBe(100000n);
     });
 
     test('manual clock manipulation with setClock', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
-        // Get clock, mutate, write back (mirrors Rust set_sysvar pattern)
         const clock = client.svm.getClock();
         clock.slot = 5000n;
         clock.epoch = 3n;
@@ -43,7 +40,7 @@ describe('Time-Based Testing', () => {
     });
 
     test('time-locked vault pattern with setAccount and warpToSlot', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm
             .withSigverify(false)
             .withBlockhashCheck(false)
@@ -52,7 +49,6 @@ describe('Time-Based Testing', () => {
         const programId = (await generateKeyPairSigner()).address;
         const vaultAccount = await generateKeyPairSigner();
 
-        // Structure: [u8 discriminator, u64 unlock_slot, u64 amount]
         const unlockSlot = 10000n;
         const lockedAmount = 5_000_000_000n;
 
@@ -73,16 +69,13 @@ describe('Time-Based Testing', () => {
             space: BigInt(vaultData.length),
         });
 
-        // Before unlock: verify clock is before unlock slot
         const beforeClock = client.svm.getClock();
         expect(beforeClock.slot).toBeLessThan(unlockSlot);
 
-        // Warp past unlock
         client.svm.warpToSlot(unlockSlot + 100n);
         const afterClock = client.svm.getClock();
         expect(afterClock.slot).toBeGreaterThan(unlockSlot);
 
-        // Vault account still exists with correct data
         const vault = client.svm.getAccount(vaultAccount.address);
         expect(vault.exists).toBe(true);
         if (vault.exists) {
@@ -93,22 +86,19 @@ describe('Time-Based Testing', () => {
     });
 
     test('timestamp-based testing with setClock', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
-        // Set a known timestamp (mirrors Rust timestamp-based testing pattern)
         const clock = client.svm.getClock();
         const startTimestamp = 1700000000n;
         clock.unixTimestamp = startTimestamp;
         client.svm.setClock(clock);
 
-        // Verify starting timestamp
         const before = client.svm.getClock();
         expect(before.unixTimestamp).toBe(startTimestamp);
 
-        // Simulate 1 hour passing
         const oneHourLater = client.svm.getClock();
-        oneHourLater.slot = before.slot + 9000n; // ~3600s / 0.4s per slot
+        oneHourLater.slot = before.slot + 9000n;
         oneHourLater.unixTimestamp = startTimestamp + 3600n;
         client.svm.setClock(oneHourLater);
 
@@ -118,7 +108,7 @@ describe('Time-Based Testing', () => {
     });
 
     test('epoch schedule is readable', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const epochSchedule = client.svm.getEpochSchedule();

@@ -92,13 +92,9 @@ const blockhash = client.svm.latestBlockhash();
 console.log('Blockhash:', blockhash);
 ```
 
-### latestBlockhashLifetime
+### getLatestBlockhash (via client.rpc)
 
-```typescript
-latestBlockhashLifetime(): TransactionBlockhashLifetime
-```
-
-Get the blockhash with lifetime information. Use this when building transactions with Kit.
+Get the blockhash with lifetime information for building transactions manually. Use the RPC helper since it returns both `blockhash` and `lastValidBlockHeight`.
 
 ```typescript
 import {
@@ -106,13 +102,17 @@ import {
     setTransactionMessageLifetimeUsingBlockhash,
 } from '@solana/kit';
 
-const blockhashLifetime = client.svm.latestBlockhashLifetime();
+const { value: blockhashLifetime } = await client.rpc.getLatestBlockhash().send();
 
 const tx = setTransactionMessageLifetimeUsingBlockhash(
     blockhashLifetime,
     createTransactionMessage({ version: 0 })
 );
 ```
+
+<Callout type="info">
+  When using program plugins like `systemProgram()` or `tokenProgram()`, you never need to fetch the blockhash yourself — `client.sendTransaction()` (and the `.sendTransaction()` helper on instruction chains) handle it for you.
+</Callout>
 
 ### expireBlockhash
 

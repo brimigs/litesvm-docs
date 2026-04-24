@@ -59,10 +59,13 @@ let balance = svm.get_balance(&pubkey).unwrap_or(0);
 <Tab value="TypeScript">
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
 // LiteSVM - fast and simple
-const client = await createClient(); // Just an object in memory
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 // Everything is synchronous and immediate
 const balance = client.svm.getBalance(pubkey) ?? 0n;
