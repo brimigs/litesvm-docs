@@ -37,22 +37,22 @@ cargo add --dev solana-sdk
 <Tabs items={['pnpm', 'npm', 'yarn', 'bun']}>
 <Tab value="pnpm">
 ```bash
-pnpm add @solana/kit @solana/kit-client-litesvm @solana-program/system
+pnpm add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/system
 ```
 </Tab>
 <Tab value="npm">
 ```bash
-npm install @solana/kit @solana/kit-client-litesvm @solana-program/system
+npm install @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/system
 ```
 </Tab>
 <Tab value="yarn">
 ```bash
-yarn add @solana/kit @solana/kit-client-litesvm @solana-program/system
+yarn add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/system
 ```
 </Tab>
 <Tab value="bun">
 ```bash
-bun add @solana/kit @solana/kit-client-litesvm @solana-program/system
+bun add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/system
 ```
 </Tab>
 </Tabs>
@@ -127,12 +127,16 @@ fn create_account() {
 Copy this code into your test file:
 
 ```typescript title="basic-test.ts"
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-// Create a client with LiteSVM (auto-generates a funded payer)
-const client = await createClient();
+// Payer first, then the LiteSVM transport.
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
-// Check the balance (payer is auto-funded)
+// Fund the payer and check balance
+client.svm.airdrop(client.payer.address, lamports(5_000_000_000n));
 const balance = client.svm.getBalance(client.payer.address);
 console.log('Balance:', balance, 'lamports');
 ```
@@ -252,12 +256,17 @@ fn test_transfer() {
 Create a new file and copy this code:
 
 ```typescript title="transfer-test.ts"
-import { createClient } from '@solana/kit-client-litesvm';
-import { generateKeyPairSigner, lamports } from '@solana/kit';
+import { createClient, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 import { systemProgram } from '@solana-program/system';
 
-// Create client with LiteSVM and the system program plugin
-const client = (await createClient()).use(systemProgram());
+// Payer first, then the LiteSVM transport, then program plugins.
+const mySigner = await generateKeyPairSigner();
+const client = createClient()
+    .use(signer(mySigner))
+    .use(litesvm())
+    .use(systemProgram());
 const recipient = await generateKeyPairSigner();
 
 // Airdrop SOL to the payer

@@ -1,10 +1,10 @@
 import { describe, test, expect } from 'bun:test';
-import { createClient } from '@solana/kit-client-litesvm';
 import { address, generateKeyPairSigner, lamports } from '@solana/kit';
+import { createLitesvmClient } from './_helpers';
 
 describe('Account Setup', () => {
     test('basic account setup with rent exemption', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         const testAccount = await generateKeyPairSigner();
 
         const dataSize = 100n;
@@ -23,7 +23,6 @@ describe('Account Setup', () => {
             space: BigInt(accountData.length),
         });
 
-        // Verify via getAccount
         const retrieved = client.svm.getAccount(testAccount.address);
         expect(retrieved.exists).toBe(true);
         if (retrieved.exists) {
@@ -33,13 +32,12 @@ describe('Account Setup', () => {
             expect(Array.from(retrieved.data)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         }
 
-        // Verify via getBalance
         const balance = client.svm.getBalance(testAccount.address);
         expect(balance).toBe(lamports(minBalance));
     });
 
     test('set up multiple accounts and verify via RPC', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         const programId = address('11111111111111111111111111111111');
 
         const accounts = await Promise.all(
@@ -60,31 +58,29 @@ describe('Account Setup', () => {
             });
         }
 
-        // Verify all accounts via RPC getMultipleAccounts
         const { value: rpcAccounts } = await client.rpc
             .getMultipleAccounts(addresses)
             .send();
 
         expect(rpcAccounts.length).toBe(5);
-        rpcAccounts.forEach((acc, i) => {
+        rpcAccounts.forEach((acc) => {
             expect(acc).not.toBeNull();
             if (acc) {
-                expect(acc.lamports).toBe(1_000_000n);
+                expect(acc.lamports).toBe(lamports(1_000_000n));
             }
         });
     });
 
     test('program-owned data account with serialized state', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         const programId = (await generateKeyPairSigner()).address;
         const dataAccount = await generateKeyPairSigner();
 
-        // Layout: [u8 discriminator, u64 counter, pubkey placeholder (32 bytes)]
         const data = new Uint8Array(1 + 8 + 32);
         const view = new DataView(data.buffer);
 
-        data[0] = 0x01; // discriminator
-        view.setBigUint64(1, 100n, true); // counter
+        data[0] = 0x01;
+        view.setBigUint64(1, 100n, true);
 
         const minBalance = client.svm.minimumBalanceForRentExemption(BigInt(data.length));
 
@@ -97,7 +93,6 @@ describe('Account Setup', () => {
             space: BigInt(data.length),
         });
 
-        // Verify
         const retrieved = client.svm.getAccount(dataAccount.address);
         expect(retrieved.exists).toBe(true);
         if (retrieved.exists) {

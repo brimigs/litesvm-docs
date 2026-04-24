@@ -27,22 +27,22 @@ Testing token logic on Solana means setting up mints, token accounts, and author
 <Tabs items={['pnpm', 'npm', 'yarn', 'bun']} groupId='package-manager'>
 <Tab value="pnpm">
 ```bash
-pnpm add @solana/kit @solana/kit-client-litesvm @solana-program/token
+pnpm add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/token
 ```
 </Tab>
 <Tab value="npm">
 ```bash
-npm install @solana/kit @solana/kit-client-litesvm @solana-program/token
+npm install @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/token
 ```
 </Tab>
 <Tab value="yarn">
 ```bash
-yarn add @solana/kit @solana/kit-client-litesvm @solana-program/token
+yarn add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/token
 ```
 </Tab>
 <Tab value="bun">
 ```bash
-bun add @solana/kit @solana/kit-client-litesvm @solana-program/token
+bun add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana-program/token
 ```
 </Tab>
 </Tabs>
@@ -50,11 +50,18 @@ bun add @solana/kit @solana/kit-client-litesvm @solana-program/token
 ## Create a Mint
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
-import { generateKeyPairSigner } from '@solana/kit';
+import { createClient, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 import { tokenProgram } from '@solana-program/token';
 
-const client = (await createClient()).use(tokenProgram());
+const mySigner = await generateKeyPairSigner();
+const client = createClient()
+    .use(signer(mySigner))
+    .use(litesvm())
+    .use(tokenProgram());
+
+client.svm.airdrop(client.payer.address, lamports(10_000_000_000n));
 
 const mintAuthority = await generateKeyPairSigner();
 const newMint = await generateKeyPairSigner();

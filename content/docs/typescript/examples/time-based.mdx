@@ -12,9 +12,12 @@ Demonstrates using `warpToSlot` to test time-dependent program logic.
 ## Basic Clock Manipulation
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 // Enable sysvars for clock access
 client.svm.withSysvars();
@@ -48,10 +51,12 @@ console.log('  Epoch:', afterWarp2.epoch);
 Example pattern for testing time-locked functionality:
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
-import { address, lamports } from '@solana/kit';
+import { createClient, address, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 
 client.svm
     .withSigverify(false)
@@ -122,9 +127,12 @@ if (updatedVault.exists) {
 You can read the epoch schedule to understand the slot/epoch relationship on the cluster:
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 client.svm.withSysvars();
 
 const epochSchedule = client.svm.getEpochSchedule();
@@ -142,9 +150,12 @@ console.log('First normal slot:', epochSchedule.firstNormalSlot);
 When your program reads `epoch` or `unix_timestamp` from the Clock sysvar, use `setClock` to set those fields directly:
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
+import { createClient, generateKeyPairSigner } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 
-const client = await createClient();
+const mySigner = await generateKeyPairSigner();
+const client = createClient().use(signer(mySigner)).use(litesvm());
 client.svm.withSysvars();
 
 // Get clock, mutate, write back

@@ -1,9 +1,9 @@
 import { describe, test, expect } from 'bun:test';
-import { createClient } from '@solana/kit-client-litesvm';
+import { createLitesvmClient } from './_helpers';
 
 describe('Sysvars (API Reference)', () => {
     test('getClock returns all documented properties', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const clock = client.svm.getClock();
@@ -15,7 +15,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('setClock writes all clock fields', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const clock = client.svm.getClock();
@@ -35,7 +35,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getRent returns documented properties', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const rent = client.svm.getRent();
@@ -45,7 +45,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('minimumBalanceForRentExemption for different sizes', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
 
         const sizes = [0n, 100n, 1000n];
         let prevMin = 0n;
@@ -58,7 +58,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getEpochSchedule returns documented properties', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const es = client.svm.getEpochSchedule();
@@ -70,7 +70,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getEpochRewards returns documented properties', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const rewards = client.svm.getEpochRewards();
@@ -83,7 +83,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getSlotHashes returns array', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const slotHashes = client.svm.getSlotHashes();
@@ -96,7 +96,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getSlotHistory returns nextSlot', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const slotHistory = client.svm.getSlotHistory();
@@ -104,7 +104,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getLastRestartSlot and setLastRestartSlot', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const lastRestart = client.svm.getLastRestartSlot();
@@ -116,7 +116,7 @@ describe('Sysvars (API Reference)', () => {
     });
 
     test('getStakeHistory returns data', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const stakeHistory = client.svm.getStakeHistory();

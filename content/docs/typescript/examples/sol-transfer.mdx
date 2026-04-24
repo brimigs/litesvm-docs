@@ -12,12 +12,17 @@ The most basic Solana transaction: move SOL from one account to another. This is
 ## Full Example
 
 ```typescript
-import { createClient } from '@solana/kit-client-litesvm';
-import { generateKeyPairSigner, lamports } from '@solana/kit';
+import { createClient, generateKeyPairSigner, lamports } from '@solana/kit';
+import { litesvm } from '@solana/kit-plugin-litesvm';
+import { signer } from '@solana/kit-plugin-signer';
 import { systemProgram } from '@solana-program/system';
 
-// Create client with LiteSVM and the system program plugin
-const client = (await createClient()).use(systemProgram());
+// Payer first, then the LiteSVM transport, then program plugins.
+const mySigner = await generateKeyPairSigner();
+const client = createClient()
+    .use(signer(mySigner))
+    .use(litesvm())
+    .use(systemProgram());
 const recipient = await generateKeyPairSigner();
 
 // Airdrop SOL to the payer

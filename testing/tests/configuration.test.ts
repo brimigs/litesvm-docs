@@ -1,23 +1,22 @@
 import { describe, test, expect } from 'bun:test';
-import { createClient } from '@solana/kit-client-litesvm';
 import { generateKeyPairSigner, lamports } from '@solana/kit';
+import { createLitesvmClient } from './_helpers';
 
 describe('Configuration', () => {
     test('withSigverify enables and disables', async () => {
-        const client = await createClient();
-        // Should not throw
+        const client = await createLitesvmClient();
         client.svm.withSigverify(false);
         client.svm.withSigverify(true);
     });
 
     test('withBlockhashCheck enables and disables', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withBlockhashCheck(false);
         client.svm.withBlockhashCheck(true);
     });
 
     test('withSysvars enables sysvar access', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withSysvars();
 
         const clock = client.svm.getClock();
@@ -28,39 +27,38 @@ describe('Configuration', () => {
     });
 
     test('withBuiltins does not throw', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withBuiltins();
     });
 
     test('withPrecompiles does not throw', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withPrecompiles();
     });
 
     test('withDefaultPrograms does not throw', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withDefaultPrograms();
     });
 
     test('withLamports sets default lamports', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withLamports(1_000_000_000n);
     });
 
     test('withLogBytesLimit sets limit', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withLogBytesLimit(10000n);
     });
 
     test('withTransactionHistory sets capacity', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
         client.svm.withTransactionHistory(100n);
     });
 
     test('builder methods chain correctly', async () => {
-        const client = await createClient();
+        const client = await createLitesvmClient();
 
-        // All methods should return LiteSVM for chaining
         const result = client.svm
             .withSigverify(false)
             .withBlockhashCheck(false)
@@ -68,24 +66,16 @@ describe('Configuration', () => {
             .withBuiltins()
             .withTransactionHistory(100n);
 
-        // Verify chaining returned the svm instance
         expect(result).toBe(client.svm);
     });
 
-    test('tap executes inline function while chaining', async () => {
-        const client = await createClient();
+    test('airdrop while configuring builder', async () => {
+        const client = await createLitesvmClient();
         const account = await generateKeyPairSigner();
-        let tapCalled = false;
 
-        client.svm
-            .withSysvars()
-            .tap(svm => {
-                svm.airdrop(account.address, lamports(5_000_000_000n));
-                tapCalled = true;
-            })
-            .withTransactionHistory(100n);
+        client.svm.withSysvars().withTransactionHistory(100n);
+        client.svm.airdrop(account.address, lamports(5_000_000_000n));
 
-        expect(tapCalled).toBe(true);
         const balance = client.svm.getBalance(account.address);
         expect(balance).toBe(lamports(5_000_000_000n));
     });
