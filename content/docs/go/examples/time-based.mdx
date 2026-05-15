@@ -1,0 +1,201 @@
+---
+title: Time-Based Testing
+description: Test time-dependent logic with litesvm-go clock manipulation
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+# Time-Based Testing Example
+
+Demonstrates using `WarpToSlot` and `SetClock` to test time-dependent program logic.
+
+## Basic Clock Manipulation
+
+```go
+package mytest
+
+import (
+    "testing"
+
+    litesvm "github.com/LiteSVM/litesvm-go"
+)
+
+func TestClockWarp(t *testing.T) {
+    svm, err := litesvm.New()
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer svm.Close()
+
+    // Read the initial clock.
+    initial, _ := svm.Clock()
+    t.Logf("initial state:")
+    t.Logf("  slot:           %d", initial.Slot)
+    t.Logf("  epoch:          %d", initial.Epoch)
+    t.Logf("  unix timestamp: %d", initial.UnixTimestamp)
+
+    // Warp to slot 1_000.
+    _ = svm.WarpToSlot(1_000)
+
+    after, _ := svm.Clock()
+    t.Logf("after warpToSlot(1000):")
+    t.Logf("  slot:  %d", after.Slot)
+    t.Logf("  epoch: %d", after.Epoch)
+
+    // Warp further.
+    _ = svm.WarpToSlot(100_000)
+
+    after2, _ := svm.Clock()
+    t.Logf("after warpToSlot(100000):")
+    t.Logf("  slot:  %d", after2.Slot)
+    t.Logf("  epoch: %d", after2.Epoch)
+}
+```
+
+## Testing Time-Locked Logic
+
+```go
+package mytest
+
+import (
+    "encoding/binary"
+    "testing"
+
+    litesvm "github.com/LiteSVM/litesvm-go"
+    solana "github.com/gagliardetto/solana-go"
+)
+
+func TestTimeLockedVault(t *testing.T) {
+    svm, err := litesvm.New()
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer svm.Close()
+
+    _ = svm.SetSigverify(false)
+    _ = svm.SetBlockhashCheck(false)
+    _ = svm.SetSysvars()
+
+    // Fund a payer.
+    priv, _ := solana.NewRandomPrivateKey()
+    payer := priv.PublicKey()
+    _ = svm.Airdrop(payer, 10_000_000_000)
+
+    // Set up a time-locked vault account.
+    // Layout: [u8 discriminator, u64 unlock_slot, u64 amount]
+    const unlockSlot = uint64(10_000)
+    const lockedAmount = uint64(5_000_000_000)
+
+    vaultData := make([]byte, 1+8+8)
+    vaultData[0] = 0x01
+    binary.LittleEndian.PutUint64(vaultData[1:9], unlockSlot)
+    binary.LittleEndian.PutUint64(vaultData[9:17], lockedAmount)
+
+    programID := solana.NewWallet().PublicKey()
+    vaultAddr := solana.NewWallet().PublicKey()
+    minBalance, _ := svm.MinimumBalanceForRentExemption(len(vaultData))
+
+    acct, err := litesvm.NewAccount(minBalance+lockedAmount, vaultData, programID, false, 0)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer acct.Close()
+
+    if err := svm.SetAccount(vaultAddr, acct); err != nil {
+        t.Fatal(err)
+    }
+
+    t.Logf("vault created: unlock slot=%d, locked=%.3f SOL",
+        unlockSlot, float64(lockedAmount)/1e9)
+
+    // --- Test 1: Before unlock ---
+    cBefore, _ := svm.Clock()
+    t.Logf("current slot: %d", cBefore.Slot)
+    // In a real test you would build a withdraw instruction here and assert
+    // it fails because the current slot < unlock_slot.
+    t.Log("withdrawal attempt: EXPECTED TO FAIL (too early)")
+
+    // --- Test 2: After unlock ---
+    _ = svm.WarpToSlot(unlockSlot + 100)
+
+    cAfter, _ := svm.Clock()
+    t.Logf("current slot: %d", cAfter.Slot)
+    // Build and submit the withdraw instruction; assert it succeeds.
+    t.Log("withdrawal attempt: EXPECTED TO SUCCEED (after unlock)")
+
+    // Verify vault state.
+    updated := svm.GetAccount(vaultAddr)
+    if updated == nil {
+        t.Fatal("vault missing")
+    }
+    defer updated.Close()
+    t.Logf("vault balance: %d lamports", updated.Lamports())
+}
+```
+
+## Reading the Epoch Schedule
+
+```go
+func TestReadEpochSchedule(t *testing.T) {
+    svm, _ := litesvm.New()
+    defer svm.Close()
+
+    es, _ := svm.EpochSchedule()
+    t.Logf("slots per epoch:    %d", es.SlotsPerEpoch)
+    t.Logf("first normal epoch: %d", es.FirstNormalEpoch)
+    t.Logf("first normal slot:  %d", es.FirstNormalSlot)
+}
+```
+
+<Callout type="warning">
+  `WarpToSlot` advances the clock's `Slot` field but does **not** automatically update `Epoch` or `UnixTimestamp`. Use `SetClock` for full control over clock fields.
+</Callout>
+
+## Manual Clock Manipulation
+
+When your program reads `Epoch` or `UnixTimestamp` from the Clock sysvar, set those fields directly with `SetClock`:
+
+```go
+func TestSetClock(t *testing.T) {
+    svm, _ := litesvm.New()
+    defer svm.Close()
+
+    c, _ := svm.Clock()
+    c.Slot = 50_000
+    c.Epoch = 5
+    c.UnixTimestamp = 1_700_000_000
+    _ = svm.SetClock(c)
+
+    after, _ := svm.Clock()
+    t.Logf("slot:  %d", after.Slot)           // 50000
+    t.Logf("epoch: %d", after.Epoch)          // 5
+    t.Logf("unix:  %d", after.UnixTimestamp)  // 1700000000
+}
+```
+
+This mirrors the Rust `set_sysvar(&clock)` pattern. Use `WarpToSlot` for simple slot advancement, `SetClock` when you need epoch or timestamp control.
+
+## Use Cases
+
+Time manipulation is useful for testing:
+
+| Scenario                | Approach                                       |
+| ----------------------- | ---------------------------------------------- |
+| Token vesting           | Warp past vesting cliff / milestones           |
+| Auction endings         | Warp past auction end slot                     |
+| Staking rewards         | Use `SetClock` to set epoch                    |
+| Time-locked withdrawals | Warp past unlock slot                          |
+| Rate limiting           | Warp between allowed intervals                 |
+| Expiring orders         | Warp past order expiration                     |
+
+<Callout type="info">
+  `WarpToSlot` only changes the slot. The unix timestamp may not update proportionally - use `SetClock` if your program reads `UnixTimestamp`.
+</Callout>
+
+## Key Points
+
+1. **Default sysvars are on** - `litesvm.New()` returns a handle with sysvars initialized; call `SetSysvars()` to reset to defaults if you have mutated them.
+2. **Warp forward** - `WarpToSlot(slot)` advances the slot field only.
+3. **Full control** - `SetClock(Clock{...})` lets you set `Epoch`, `UnixTimestamp`, and the other fields.
+4. **Read** - `svm.Clock()` reads the current values.
+5. **Test pattern** - test before and after the time boundary; expect failure on one side and success on the other.

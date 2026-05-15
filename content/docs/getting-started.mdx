@@ -16,7 +16,7 @@ This guide covers the basics: how to create an account, fund an account, and sen
 <Step>
 ### Install Dependencies
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 
 Add LiteSVM to your dev dependencies:
@@ -58,6 +58,20 @@ bun add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana
 </Tabs>
 
 </Tab>
+<Tab value="Go">
+
+Add the LiteSVM Go bindings and `solana-go` (used for keypairs, instructions, and transaction building) to your module:
+
+```bash
+go get github.com/LiteSVM/litesvm-go@latest
+go get github.com/gagliardetto/solana-go@latest
+```
+
+<Callout type="warning">
+  **Alpine / musl users:** add `-tags musl` to your `go build` / `go test` invocations so the right vendored archive is linked.
+</Callout>
+
+</Tab>
 </Tabs>
 
 </Step>
@@ -65,7 +79,7 @@ bun add @solana/kit @solana/kit-plugin-litesvm @solana/kit-plugin-signer @solana
 <Step>
 ### Create Test File
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 
 Inside your workspace, create a folder for `tests`.
@@ -84,6 +98,17 @@ touch basic-test.ts
 ```
 
 </Tab>
+<Tab value="Go">
+
+Initialize a Go module and create a test file:
+
+```bash
+mkdir mytest && cd mytest
+go mod init mytest
+touch basic_test.go
+```
+
+</Tab>
 </Tabs>
 
 </Step>
@@ -91,7 +116,7 @@ touch basic-test.ts
 <Step>
 ### Create and Fund an Account
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 
 Let's write your first LiteSVM test.
@@ -142,6 +167,48 @@ console.log('Balance:', balance, 'lamports');
 ```
 
 </Tab>
+<Tab value="Go">
+
+Copy this code into your test file:
+
+```go title="basic_test.go"
+package mytest
+
+import (
+    "testing"
+
+    litesvm "github.com/LiteSVM/litesvm-go"
+    solana "github.com/gagliardetto/solana-go"
+)
+
+func TestCreateAccount(t *testing.T) {
+    // Create the test environment
+    svm, err := litesvm.New()
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer svm.Close()
+
+    // Create a test account
+    priv, _ := solana.NewRandomPrivateKey()
+    user := priv.PublicKey()
+
+    // Fund the account with SOL
+    if err := svm.Airdrop(user, 1_000_000_000); err != nil {
+        t.Fatal(err)
+    }
+
+    // Check the balance
+    balance, _, _ := svm.Balance(user)
+    if balance != 1_000_000_000 {
+        t.Fatalf("balance = %d, want 1_000_000_000", balance)
+    }
+
+    t.Logf("Account funded with %.3f SOL", float64(balance)/1e9)
+}
+```
+
+</Tab>
 </Tabs>
 
 </Step>
@@ -149,7 +216,7 @@ console.log('Balance:', balance, 'lamports');
 <Step>
 ### Run Your Test
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 
 ```bash
@@ -186,6 +253,23 @@ Balance: 5000000000n lamports
 ```
 
 </Tab>
+<Tab value="Go">
+
+```bash
+go test -v -run TestCreateAccount
+```
+
+You should see:
+
+```
+=== RUN   TestCreateAccount
+    basic_test.go:30: Account funded with 1.000 SOL
+--- PASS: TestCreateAccount (0.00s)
+PASS
+ok      mytest  0.123s
+```
+
+</Tab>
 </Tabs>
 
 <Callout type="success">
@@ -200,7 +284,7 @@ Balance: 5000000000n lamports
 
 Now let's create a transfer transaction.
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 
 Create a new test file and copy this code:
@@ -286,6 +370,85 @@ console.log('Transfer successful!');
 ```
 
 </Tab>
+<Tab value="Go">
+
+Add this test alongside `TestCreateAccount` (or in a new `*_test.go` file in the same module):
+
+```go title="transfer_test.go"
+package mytest
+
+import (
+    "testing"
+
+    litesvm "github.com/LiteSVM/litesvm-go"
+    solana "github.com/gagliardetto/solana-go"
+    "github.com/gagliardetto/solana-go/programs/system"
+)
+
+func TestTransfer(t *testing.T) {
+    svm, err := litesvm.New()
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer svm.Close()
+
+    // Create two accounts
+    alicePriv, _ := solana.NewRandomPrivateKey()
+    alice := alicePriv.PublicKey()
+    bob := solana.NewWallet().PublicKey()
+
+    // Fund Alice
+    if err := svm.Airdrop(alice, 2_000_000_000); err != nil {
+        t.Fatal(err)
+    }
+
+    // Build, sign, and encode the transfer
+    blockhash, _ := svm.LatestBlockhash()
+    ix := system.NewTransferInstruction(1_000_000_000, alice, bob).Build()
+    tx, err := solana.NewTransaction(
+        []solana.Instruction{ix},
+        blockhash,
+        solana.TransactionPayer(alice),
+    )
+    if err != nil {
+        t.Fatal(err)
+    }
+    if _, err := tx.Sign(func(k solana.PublicKey) *solana.PrivateKey {
+        if k.Equals(alice) {
+            return &alicePriv
+        }
+        return nil
+    }); err != nil {
+        t.Fatal(err)
+    }
+    txBytes, _ := tx.MarshalBinary()
+
+    // Send it (execution happens immediately)
+    out, err := svm.SendLegacyTransaction(txBytes)
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer out.Close()
+
+    if !out.IsOk() {
+        t.Fatalf("tx failed: %s", out.Error())
+    }
+
+    // Check new balances
+    bobBal, _, _ := svm.Balance(bob)
+    aliceBal, _, _ := svm.Balance(alice)
+    if bobBal != 1_000_000_000 {
+        t.Fatalf("bob balance = %d, want 1_000_000_000", bobBal)
+    }
+    if aliceBal >= 1_000_000_000 {
+        t.Fatalf("alice balance = %d, want < 1_000_000_000", aliceBal)
+    }
+
+    t.Log("Transfer successful!")
+}
+```
+
+</Tab>
 </Tabs>
 
 <Callout type="success">
@@ -298,7 +461,7 @@ console.log('Transfer successful!');
 <Step>
 ### Run All Tests
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 
 ```bash
@@ -356,6 +519,26 @@ Transfer successful!
 ```
 
 </Tab>
+<Tab value="Go">
+
+```bash
+go test -v ./...
+```
+
+You should see:
+
+```
+=== RUN   TestCreateAccount
+    basic_test.go:30: Account funded with 1.000 SOL
+--- PASS: TestCreateAccount (0.00s)
+=== RUN   TestTransfer
+    transfer_test.go:62: Transfer successful!
+--- PASS: TestTransfer (0.00s)
+PASS
+ok      mytest  0.234s
+```
+
+</Tab>
 </Tabs>
 
 <Callout type="success">
@@ -370,7 +553,7 @@ Transfer successful!
 **[Why LiteSVM →](/docs/core-concepts)** Learn why you would want to use LiteSVM for testing
 
 
-<Tabs items={['Rust', 'TypeScript']} groupId="litesvm-lang">
+<Tabs items={['Rust', 'TypeScript', 'Go']} groupId="litesvm-lang">
 <Tab value="Rust">
 - **[Testing Your Program →](/docs/testing-your-program)** Learn how to test your own Solana program
 - **[Examples →](/docs/examples)** View copy-paste solutions for common scenarios and full repository examples
@@ -380,5 +563,10 @@ Transfer successful!
 - **[Testing Your Program →](/docs/typescript/getting-started)** Learn how to test your own Solana program using LiteSVM for TypeScript
 - **[Examples →](/docs/typescript/examples)** View copy-paste solutions for common scenarios
 - **[API Reference →](/docs/typescript/api-reference)** Learn advanced features and custom configurations
+</Tab>
+<Tab value="Go">
+- **[Testing Your Program →](/docs/go/getting-started)** Learn how to test your own Solana program using LiteSVM for Go
+- **[Examples →](/docs/go/examples)** View copy-paste solutions for common scenarios
+- **[API Reference →](/docs/go/api-reference)** Learn advanced features and custom configurations
 </Tab>
 </Tabs>
