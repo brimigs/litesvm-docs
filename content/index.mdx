@@ -55,7 +55,7 @@ import Image from "next/image";
     Installation
   </h2>
 
-  <Tabs items={["Rust", "TypeScript"]}>
+  <Tabs items={["Rust", "TypeScript", "Go"]}>
     <Tab value="Rust">
       <div className="flex flex-col gap-6">
         <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
@@ -158,6 +158,49 @@ import Image from "next/image";
           </div>
           ```bash
           pnpm install @solana/kit-plugin-litesvm @solana/kit
+          ```
+        </div>
+      </div>
+    </Tab>
+    <Tab value="Go">
+      <div className="flex flex-col gap-6">
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Install litesvm-go</h3>
+              <p className="text-sm text-fd-muted-foreground">Go bindings for LiteSVM</p>
+            </div>
+            <a
+              href="https://pkg.go.dev/github.com/LiteSVM/litesvm-go"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              pkg.go.dev
+            </a>
+          </div>
+          ```bash
+          go get github.com/LiteSVM/litesvm-go@latest
+          ```
+        </div>
+
+        <div className="bg-fd-muted/30 rounded-lg p-6 border border-fd-border/50">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Add solana-go</h3>
+              <p className="text-sm text-fd-muted-foreground">Keypairs, instructions, and transaction building</p>
+            </div>
+            <a
+              href="https://pkg.go.dev/github.com/gagliardetto/solana-go"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-1 bg-fd-background hover:bg-fd-muted rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              pkg.go.dev
+            </a>
+          </div>
+          ```bash
+          go get github.com/gagliardetto/solana-go@latest
           ```
         </div>
       </div>
